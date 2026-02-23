@@ -206,6 +206,9 @@
         Crown: <><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 20h18" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
         Repeat: <><polyline points="17 1 21 5 17 9" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 11V9a4 4 0 014-4h14" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round"/><polyline points="7 23 3 19 7 15" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/><path d="M21 13v2a4 4 0 01-4 4H3" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
         Share: <><circle cx="18" cy="5" r="3" fill="none" stroke={c} strokeWidth="1.75"/><circle cx="6" cy="12" r="3" fill="none" stroke={c} strokeWidth="1.75"/><circle cx="18" cy="19" r="3" fill="none" stroke={c} strokeWidth="1.75"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" stroke={c} strokeWidth="1.75" strokeLinecap="round"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
+        Pause: <><rect x="6" y="4" width="4" height="16" rx="1" fill={c}/><rect x="14" y="4" width="4" height="16" rx="1" fill={c}/></>,
+        Mail: <><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" fill="none" stroke={c} strokeWidth="1.75"/><polyline points="22,6 12,13 2,6" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
+        Trophy: <><path d="M6 9H3V4h3M18 9h3V4h-3M6 4h12v7a6 6 0 01-12 0V4z" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/><line x1="12" y1="20" x2="12" y2="16" stroke={c} strokeWidth="1.75" strokeLinecap="round"/><line x1="8" y1="20" x2="16" y2="20" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
         Heart: <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>,
         Map: <><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/><line x1="8" y1="2" x2="8" y2="18" stroke={c} strokeWidth="1.75" strokeLinecap="round"/><line x1="16" y1="6" x2="16" y2="22" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
         Court: <><rect x="2" y="5" width="20" height="14" rx="2" fill="none" stroke={c} strokeWidth="1.75"/><line x1="12" y1="5" x2="12" y2="19" stroke={c} strokeWidth="1.75"/><line x1="2" y1="12" x2="22" y2="12" stroke={c} strokeWidth="1.75"/></>,
@@ -2876,9 +2879,7 @@
                 <div style={{ fontSize:'11px', fontWeight:'700', letterSpacing:'0.1em', textTransform:'uppercase', color:'var(--text3)', marginBottom:'2px' }}>King's Court</div>
                 <div style={{ fontFamily:'DM Mono', fontSize:'28px', color: isRunning&&!isPaused ? 'var(--accent)' : 'var(--text2)', letterSpacing:'0.05em' }}>{fmtMs(totalMs)}</div>
               </div>
-              <button onClick={pauseGame} disabled={!isRunning} style={{ width:'36px', height:'36px', borderRadius:'var(--radius3)', background:'var(--surface)', border:'1px solid var(--border)', color: isRunning ? 'var(--amber)' : 'var(--text3)', cursor: isRunning?'pointer':'default', display:'flex', alignItems:'center', justifyContent:'center', opacity: isRunning?1:0.4 }}>
-                <I n="Pause" s={16} c="currentColor" />
-              </button>
+              <div style={{ width:'36px' }} />
             </div>
 
             {/* Current kings banner */}
@@ -2956,7 +2957,10 @@
               })}
             </div>
 
-            {/* End game button */}
+            {/* Pause + End game buttons */}
+            <button onClick={pauseGame} disabled={!isRunning} style={{ width:'100%', padding:'14px', borderRadius:'var(--radius2)', background:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.35)', color:'var(--amber)', fontSize:'14px', fontWeight:'700', cursor: isRunning?'pointer':'default', letterSpacing:'0.04em', marginBottom:'10px', opacity: isRunning?1:0.4 }}>
+              ⏸ Pause Game
+            </button>
             <button onClick={endGame} disabled={savingResults} style={{ width:'100%', padding:'14px', borderRadius:'var(--radius2)', background:'transparent', border:'1px solid rgba(248,113,113,0.3)', color:'var(--red)', fontSize:'14px', fontWeight:'700', cursor:'pointer', letterSpacing:'0.04em' }}>
               {savingResults ? 'Saving…' : 'End Game'}
             </button>
