@@ -2602,6 +2602,8 @@
     }
 
     // ==================== LIVE GAME SCREEN ====================
+    const GAME_SESSION_KEY = 'tv_live_game_session';
+
     function LiveGameScreen({ event, onBack, players = [], format = 'kings' }) {
       const { currentUser } = useAuth();
 
@@ -2611,26 +2613,44 @@
         return players.map(p => ({ id: p.oderId||p.id||p.name, name: p.firstName||p.name, photoURL: p.photoURL }));
       }, []);
 
+      // ── restore from localStorage if session exists ────────────
+      const getSavedSession = () => {
+        try {
+          const raw = localStorage.getItem(GAME_SESSION_KEY);
+          if (!raw) return null;
+          const s = JSON.parse(raw);
+          // Validate it matches the current player set
+          const savedIds = Object.keys(s.gameStats || {}).sort().join(',');
+          const currentIds = gamePlayers.map(p => p.id).sort().join(',');
+          if (savedIds !== currentIds) return null;
+          return s;
+        } catch(e) { return null; }
+      };
+
+      const saved = getSavedSession();
+
       // ── core state ────────────────────────────────────────────
       const [gameStats, setGameStats] = useState(() => {
+        if (saved?.gameStats) return saved.gameStats;
         const s = {};
         gamePlayers.forEach(p => { s[p.id] = { timeMs:0, wins:0, winners:0 }; });
         return s;
       });
-      const [currentKings, setCurrentKings] = useState([]);   // array of 2 player IDs
+      const [currentKings, setCurrentKings] = useState(saved?.currentKings || []);
       const [selected, setSelected] = useState([]);           // pre-selection buffer
-      const [totalMs, setTotalMs] = useState(0);
-      const [isRunning, setIsRunning] = useState(false);
-      const [isPaused, setIsPaused] = useState(false);
-      const [phase, setPhase] = useState('game');             // 'game' | 'results'
-      const [winnerAnim, setWinnerAnim] = useState(null);     // player id
+      const [totalMs, setTotalMs] = useState(saved?.totalMs || 0);
+      const [isRunning, setIsRunning] = useState(saved?.isRunning || false);
+      const [isPaused, setIsPaused] = useState(saved ? true : false); // always resume paused so timer doesn't jump
+      const [phase, setPhase] = useState('game');
+      const [winnerAnim, setWinnerAnim] = useState(null);
       const [showConfetti, setShowConfetti] = useState(false);
       const [savingResults, setSavingResults] = useState(false);
+      const [showResumePrompt, setShowResumePrompt] = useState(!!saved);
 
       const intervalRef = useRef(null);
       const winnerCooldown = useRef(false);
       const wakeLockRef = useRef(null);
-      const [winnersThisRound, setWinnersThisRound] = useState({}); // { playerId: true } — fired this round
+      const [winnersThisRound, setWinnersThisRound] = useState(saved?.winnersThisRound || {});
       const [showEditScoreboard, setShowEditScoreboard] = useState(false);
       const [editForm, setEditForm] = useState({});
 
@@ -2643,6 +2663,20 @@
         document.addEventListener('visibilitychange', onVisible);
         return () => document.removeEventListener('visibilitychange', onVisible);
       }, [isRunning, isPaused]);
+
+      // ── persist session to localStorage ───────────────────────
+      useEffect(() => {
+        if (phase === 'results') return; // game over, don't persist
+        try {
+          const session = {
+            gameStats, currentKings, totalMs, isRunning,
+            winnersThisRound,
+            gamePlayers, // store player info so we can rebuild on reload
+            savedAt: Date.now(),
+          };
+          localStorage.setItem(GAME_SESSION_KEY, JSON.stringify(session));
+        } catch(e) {}
+      }, [gameStats, currentKings, totalMs, isRunning, winnersThisRound, phase]);
 
       // ── timer tick ────────────────────────────────────────────
       useEffect(() => {
@@ -2768,6 +2802,7 @@
       const endGame = async () => {
         clearInterval(intervalRef.current);
         setIsRunning(false); setIsPaused(false);
+        try { localStorage.removeItem(GAME_SESSION_KEY); } catch(e) {}
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 5000);
         await releaseWakeLock();
@@ -2864,6 +2899,27 @@
       // ──────────────────────────────────────────────────────────
       return (
         <div style={{ minHeight:'100vh', background:'var(--bg)', paddingBottom:'40px' }}>
+
+          {/* Resume game prompt */}
+          {showResumePrompt && (
+            <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.82)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:500, backdropFilter:'blur(10px)', padding:'24px' }}>
+              <div style={{ background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:'var(--radius)', padding:'28px 24px', width:'100%', maxWidth:'360px', textAlign:'center', animation:'popIn 0.3s ease-out' }}>
+                <div style={{ fontSize:'48px', marginBottom:'12px' }}>⚡</div>
+                <div style={{ fontSize:'20px', fontWeight:'800', letterSpacing:'-0.02em', marginBottom:'6px' }}>Game in Progress</div>
+                <div style={{ fontSize:'14px', color:'var(--text2)', marginBottom:'6px' }}>You have an unfinished game.</div>
+                <div style={{ fontFamily:'DM Mono', fontSize:'22px', color:'var(--accent)', fontWeight:'500', marginBottom:'20px' }}>{fmtMs(totalMs)} played</div>
+                <button onClick={() => { setShowResumePrompt(false); }} style={{ width:'100%', padding:'14px', borderRadius:'var(--radius2)', background:'var(--accent)', border:'none', color:'#050a14', fontSize:'15px', fontWeight:'800', cursor:'pointer', marginBottom:'10px' }}>
+                  ▶ Resume Game
+                </button>
+                <button onClick={() => {
+                  try { localStorage.removeItem(GAME_SESSION_KEY); } catch(e) {}
+                  onBack();
+                }} style={{ width:'100%', padding:'12px', borderRadius:'var(--radius2)', background:'transparent', border:'1px solid rgba(248,113,113,0.3)', color:'var(--red)', fontSize:'14px', fontWeight:'700', cursor:'pointer' }}>
+                  Discard & Exit
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Winner flash overlay */}
           {winnerAnim && (() => { const wp = gamePlayers.find(p=>p.id===winnerAnim); return (
@@ -3116,6 +3172,24 @@
       const [instantPlayers, setInstantPlayers] = useState(null);
       const [instantFormat, setInstantFormat] = useState('kings');
 
+      // ── on login, check for a saved game session and route back in ──
+      const [recoveredPlayers, setRecoveredPlayers] = useState(null);
+
+      React.useEffect(() => {
+        if (!currentUser) return;
+        try {
+          const raw = localStorage.getItem(GAME_SESSION_KEY);
+          if (!raw) return;
+          const s = JSON.parse(raw);
+          // Only auto-recover sessions saved within the last 24h
+          if (!s.gamePlayers || Date.now() - s.savedAt > 86400000) {
+            localStorage.removeItem(GAME_SESSION_KEY);
+            return;
+          }
+          setRecoveredPlayers(s.gamePlayers);
+        } catch(e) {}
+      }, [currentUser]);
+
       if (loading) return (
         <div style={{ minHeight:'100vh', background:'var(--bg)', display:'flex', alignItems:'center', justifyContent:'center' }}>
           <div style={{ textAlign:'center' }}>
@@ -3128,8 +3202,11 @@
 
       if (!currentUser) return <LoginScreen onLogin={() => setScreen('home')} />;
 
-      if (liveGame) return <LiveGameScreen event={liveGame} onBack={() => setLiveGame(null)} />;
-      if (instantPlayers) return <LiveGameScreen players={instantPlayers} format={instantFormat} onBack={() => setInstantPlayers(null)} />;
+      // Auto-recover saved session — route straight into LiveGameScreen
+      if (recoveredPlayers) return <LiveGameScreen players={recoveredPlayers} format="kings" onBack={() => { try { localStorage.removeItem(GAME_SESSION_KEY); } catch(e){} setRecoveredPlayers(null); }} />;
+
+      if (liveGame) return <LiveGameScreen event={liveGame} onBack={() => { try { localStorage.removeItem(GAME_SESSION_KEY); } catch(e){} setLiveGame(null); }} />;
+      if (instantPlayers) return <LiveGameScreen players={instantPlayers} format={instantFormat} onBack={() => { try { localStorage.removeItem(GAME_SESSION_KEY); } catch(e){} setInstantPlayers(null); }} />;
 
       const handleInstantGame = (players, format) => {
         if (players) { setInstantPlayers(players); setInstantFormat(format); }
