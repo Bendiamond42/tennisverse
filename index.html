@@ -209,6 +209,7 @@
         Pause: <><rect x="6" y="4" width="4" height="16" rx="1" fill={c}/><rect x="14" y="4" width="4" height="16" rx="1" fill={c}/></>,
         UserPlus: <><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round"/><circle cx="8.5" cy="7" r="4" fill="none" stroke={c} strokeWidth="1.75"/><line x1="20" y1="8" x2="20" y2="14" stroke={c} strokeWidth="1.75" strokeLinecap="round"/><line x1="17" y1="11" x2="23" y2="11" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
         CornerDownRight: <><polyline points="15 10 20 15 15 20" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/><path d="M4 4v7a4 4 0 004 4h12" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
+        MoreVertical: <><circle cx="12" cy="5" r="1.5" fill={c}/><circle cx="12" cy="12" r="1.5" fill={c}/><circle cx="12" cy="19" r="1.5" fill={c}/></>,
         Racket: <><ellipse cx="11" cy="9" rx="5" ry="6.5" fill="none" stroke={c} strokeWidth="1.75"/><line x1="11" y1="2.5" x2="11" y2="15.5" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><line x1="5.5" y1="9" x2="16.5" y2="9" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><line x1="6.5" y1="5.5" x2="15.5" y2="12.5" stroke={c} strokeWidth="1" strokeLinecap="round" opacity="0.5"/><line x1="15.5" y1="5.5" x2="6.5" y2="12.5" stroke={c} strokeWidth="1" strokeLinecap="round" opacity="0.5"/><line x1="11" y1="15.5" x2="9" y2="21" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
         Mail: <><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" fill="none" stroke={c} strokeWidth="1.75"/><polyline points="22,6 12,13 2,6" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
         Trophy: <><path d="M6 9H3V4h3M18 9h3V4h-3M6 4h12v7a6 6 0 01-12 0V4z" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/><line x1="12" y1="20" x2="12" y2="16" stroke={c} strokeWidth="1.75" strokeLinecap="round"/><line x1="8" y1="20" x2="16" y2="20" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
@@ -710,8 +711,8 @@
                 <Input label="Last Name" value={form.lastName} onChange={e => setForm({...form, lastName:e.target.value})} placeholder="Last" style={{ flex:1, marginBottom:0 }} />
               </div>
             )}
-            <Input label="Email" type="email" value={form.email} onChange={e => setForm({...form, email:e.target.value})} placeholder="you@example.com" />
-            <Input label="Password" type="password" value={form.password} onChange={e => setForm({...form, password:e.target.value})} placeholder="••••••••" />
+            <Input label="Email" type="email" value={form.email} onChange={e => setForm({...form, email:e.target.value})} onKeyDown={e => e.key==='Enter' && handleSubmit()} placeholder="you@example.com" />
+            <Input label="Password" type="password" value={form.password} onChange={e => setForm({...form, password:e.target.value})} onKeyDown={e => e.key==='Enter' && handleSubmit()} placeholder="••••••••" />
             <Btn onClick={handleSubmit} disabled={loading} size="lg" style={{ marginBottom:'12px' }}>
               {loading ? '...' : mode === 'login' ? 'Sign in' : 'Create account'}
             </Btn>
@@ -741,8 +742,12 @@
 
       useEffect(() => {
         const now = firebase.firestore.Timestamp.now();
-        return db.collection('events').where('dateTime','>=',now).orderBy('dateTime').limit(3)
-          .onSnapshot(s => { setUpcomingEvents(s.docs.map(d => ({ id:d.id, ...d.data() }))); setLoading(false); }, () => setLoading(false));
+        return db.collection('events').where('dateTime','>=',now).orderBy('dateTime').limit(10)
+          .onSnapshot(s => {
+            const evts = s.docs.map(d => ({ id:d.id, ...d.data() })).filter(e => !e.cancelled).slice(0,3);
+            setUpcomingEvents(evts);
+            setLoading(false);
+          }, () => setLoading(false));
       }, []);
 
       const greeting = () => {
@@ -764,7 +769,7 @@
       const stats = userProfile?.stats || {};
 
       return (
-        <div style={{ minHeight:'100vh', background:'var(--bg)', paddingBottom:'100px' }}>
+        <div style={{ minHeight:'100vh', background:'var(--bg)', paddingBottom:'100px' }} onClick={() => { if (eventMenuOpen) setEventMenuOpen(false); }}>
           <div style={{ maxWidth:'500px', margin:'0 auto', padding:'24px 20px' }}>
             {/* Header */}
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'32px' }}>
@@ -804,7 +809,7 @@
                 </div>
                 <div onClick={onCreateEvent} style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'20px', cursor:'pointer' }}>
                   <I n="Calendar" s={24} c="var(--text2)" />
-                  <div style={{ marginTop:'12px', fontWeight:'700', fontSize:'15px' }}>Schedule Game</div>
+                  <div style={{ marginTop:'12px', fontWeight:'700', fontSize:'15px' }}>Host a Game</div>
                   <div style={{ fontSize:'12px', color:'var(--text2)', marginTop:'2px' }}>Plan ahead</div>
                 </div>
                 <div onClick={() => setScreen('courts')} style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'20px', cursor:'pointer' }}>
@@ -1001,9 +1006,21 @@
       useEffect(() => {
         const now = firebase.firestore.Timestamp.now();
         let q = db.collection('events').orderBy('dateTime');
-        if (filter === 'upcoming') q = q.where('dateTime','>=',now);
-        else if (filter === 'mine') q = q.where('hostId','==',currentUser.uid);
-        return q.limit(30).onSnapshot(s => { setEvents(s.docs.map(d => ({ id:d.id, ...d.data() }))); setLoading(false); }, () => setLoading(false));
+        if (filter === 'upcoming') {
+          q = q.where('dateTime','>=',now);
+        } else if (filter === 'mine') {
+          q = q.where('hostId','==',currentUser.uid);
+        } else if (filter === 'past') {
+          // For past: use where only, sort handled client-side (avoids needing new index)
+          q = db.collection('events').where('dateTime','<',now).orderBy('dateTime','desc');
+        }
+        return q.limit(30).onSnapshot(s => {
+          let evts = s.docs.map(d => ({ id:d.id, ...d.data() }));
+          // Hide cancelled events from upcoming tab
+          if (filter === 'upcoming') evts = evts.filter(e => !e.cancelled);
+          setEvents(evts);
+          setLoading(false);
+        }, () => setLoading(false));
       }, [filter, currentUser]);
 
       const fmtDate = (ts) => {
@@ -1036,8 +1053,9 @@
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'12px' }}>
                       <div style={{ fontWeight:'700', fontSize:'16px', flex:1, marginRight:'8px' }}>{e.title}</div>
                       <div style={{ display:'flex', gap:'6px', flexShrink:0 }}>
-                        {userGoing && <Badge color="green">Going</Badge>}
-                        <Badge color={e.isPrivate ? 'amber' : 'blue'}>{e.isPrivate ? 'Private' : 'Open'}</Badge>
+                        {e.cancelled && <Badge color="red">Cancelled</Badge>}
+                        {!e.cancelled && userGoing && <Badge color="green">Going</Badge>}
+                        {!e.cancelled && <Badge color={e.isPrivate ? 'amber' : 'blue'}>{e.isPrivate ? 'Private' : 'Open'}</Badge>}
                       </div>
                     </div>
                     <div style={{ display:'flex', flexWrap:'wrap', gap:'12px', fontSize:'13px', color:'var(--text2)', marginBottom:'14px' }}>
@@ -1585,6 +1603,16 @@
       const [mentionQuery, setMentionQuery] = useState('');
       const [showMentions, setShowMentions] = useState(false);
       const [cursorPos, setCursorPos] = useState(0);
+      const [editingComment, setEditingComment] = useState(null); // {id, text}
+      const [editText, setEditText] = useState('');
+      const [commentActiveMenu, setCommentActiveMenu] = useState(null); // comment id with open menu
+      const [eventMenuOpen, setEventMenuOpen] = useState(false);
+      const [showEditEvent, setShowEditEvent] = useState(false);
+      const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+      const [editEventForm, setEditEventForm] = useState(null);
+      const [savingEdit, setSavingEdit] = useState(false);
+      const [showEditDatePicker, setShowEditDatePicker] = useState(false);
+      const [showEditTimePicker, setShowEditTimePicker] = useState(false);
       const inputRef = useRef(null);
       const discussionRef = useRef(null);
 
@@ -1636,6 +1664,91 @@
         await db.collection('events').doc(eventId).update({ waitlist: (event.waitlist||[]).filter(r => r.oderId !== uid) });
       };
 
+      // Add to Calendar (builds .ics download)
+      const addToCalendar = () => {
+        const start = event?.dateTime?.toDate ? event.dateTime.toDate() : new Date(event?.dateTime||Date.now());
+        const end = new Date(start.getTime() + 90 * 60000); // 90 min default
+        const fmt = (dt) => dt.toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
+        const ics = [
+          'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Tennisverse//EN',
+          'BEGIN:VEVENT',
+          `UID:${eventId}@tennisverse`,
+          `DTSTART:${fmt(start)}`,
+          `DTEND:${fmt(end)}`,
+          `SUMMARY:${event.title}`,
+          event.location ? `LOCATION:${event.location}` : '',
+          event.notes ? `DESCRIPTION:${event.notes.replace(/
+/g,'\n')}` : '',
+          'END:VEVENT', 'END:VCALENDAR'
+        ].filter(Boolean).join('\r\n');
+        const blob = new Blob([ics], { type:'text/calendar' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${event.title.replace(/\s+/g,'_')}.ics`; a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      // Share event
+      const shareEvent = async () => {
+        const dt = event?.dateTime?.toDate ? event.dateTime.toDate() : new Date(event?.dateTime||Date.now());
+        const shareData = { title: event?.title, text: `Join me for ${event?.title} on ${dt.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}`, url: window.location.href };
+        if (navigator.share) { try { await navigator.share(shareData); return; } catch(e) {} }
+        // Fallback: copy URL
+        try { await navigator.clipboard.writeText(window.location.href); alert('Link copied!'); } catch(e) {}
+      };
+
+      // Host: open edit modal pre-filled
+      const openEditEvent = () => {
+        const dt = event?.dateTime?.toDate ? event.dateTime.toDate() : new Date(event?.dateTime||Date.now());
+        let h = dt.getHours(); const ampm = h >= 12 ? 'PM' : 'AM';
+        h = h % 12 || 12;
+        const m = dt.getMinutes();
+        setEditEventForm({
+          title: event.title || '',
+          location: event.location || '',
+          notes: event.notes || '',
+          maxPlayers: event.maxPlayers || 8,
+          hasMaxPlayers: !!event.maxPlayers,
+          isPrivate: !!event.isPrivate,
+          allowWaitlist: event.allowWaitlist !== false,
+          date: dt,
+          hour: h, minute: m, ampm,
+        });
+        setShowEditEvent(true);
+      };
+
+      const saveEditEvent = async () => {
+        if (!editEventForm?.title?.trim()) return;
+        setSavingEdit(true);
+        try {
+          const dt = editEventForm.date instanceof Date ? new Date(editEventForm.date) : new Date(editEventForm.date);
+          let h = parseInt(editEventForm.hour);
+          if (editEventForm.ampm === 'PM' && h !== 12) h += 12;
+          if (editEventForm.ampm === 'AM' && h === 12) h = 0;
+          dt.setHours(h, parseInt(editEventForm.minute), 0, 0);
+          await db.collection('events').doc(eventId).update({
+            title: editEventForm.title.trim(),
+            location: editEventForm.location.trim(),
+            notes: editEventForm.notes.trim(),
+            maxPlayers: editEventForm.hasMaxPlayers ? editEventForm.maxPlayers : null,
+            isPrivate: editEventForm.isPrivate,
+            allowWaitlist: editEventForm.allowWaitlist,
+            dateTime: firebase.firestore.Timestamp.fromDate(dt),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+          setShowEditEvent(false);
+        } catch(e) { console.error('Edit event error:', e); }
+        setSavingEdit(false);
+      };
+
+      const cancelEvent = async () => {
+        try {
+          await db.collection('events').doc(eventId).update({ cancelled: true, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+          setShowCancelConfirm(false);
+          onBack();
+        } catch(e) { console.error('Cancel event error:', e); }
+      };
+
       // Handle @mention detection
       const handleCommentChange = (e) => {
         const val = e.target.value;
@@ -1670,20 +1783,24 @@
         if (!text || !currentUser) return;
         setSendingComment(true);
         const saved = text;
-        setCommentText('');
-        setReplyingTo(null);
+        const savedReply = replyingTo;
+        // Don't clear until success
         try {
           await db.collection('events').doc(eventId).collection('comments').add({
             text: saved,
             authorId: currentUser.uid,
             authorName: `${userProfile?.firstName||''} ${userProfile?.lastName||''}`.trim() || 'Player',
             authorPhoto: userProfile?.photoURL || '',
-            replyTo: replyingTo ? { id: replyingTo.id, authorName: replyingTo.authorName, preview: replyingTo.text?.slice(0,60) } : null,
+            replyTo: savedReply ? { id: savedReply.id, authorName: savedReply.authorName, preview: savedReply.text?.slice(0,60) } : null,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             likes: [],
           });
+          setCommentText('');
+          setReplyingTo(null);
           setTimeout(() => discussionRef.current?.scrollIntoView({ behavior:'smooth', block:'end' }), 100);
-        } catch(e) { setCommentText(saved); } finally { setSendingComment(false); }
+        } catch(e) {
+          console.error('Comment send error:', e);
+        } finally { setSendingComment(false); }
       };
 
       const toggleLike = async (comment) => {
@@ -1691,6 +1808,23 @@
         const likes = comment.likes || [];
         const newLikes = likes.includes(currentUser.uid) ? likes.filter(id => id !== currentUser.uid) : [...likes, currentUser.uid];
         await db.collection('events').doc(eventId).collection('comments').doc(comment.id).update({ likes: newLikes });
+      };
+
+      const deleteComment = async (commentId) => {
+        try {
+          await db.collection('events').doc(eventId).collection('comments').doc(commentId).delete();
+        } catch(e) { console.error('Delete comment error:', e); }
+        setCommentActiveMenu(null);
+      };
+
+      const saveEditComment = async () => {
+        const newText = editText.trim();
+        if (!newText || !editingComment) return;
+        try {
+          await db.collection('events').doc(eventId).collection('comments').doc(editingComment).update({ text: newText, editedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        } catch(e) { console.error('Edit comment error:', e); }
+        setEditingComment(null);
+        setEditText('');
       };
 
       const fmtTime = (ts) => {
@@ -1738,8 +1872,22 @@
             {/* Header */}
             <PageHeader onBack={onBack} title="" right={
               <div style={{ display:'flex', gap:'8px' }}>
-                {isHost && <Btn onClick={() => onStartGame(event)} size="sm" icon="Zap">Start</Btn>}
-                <Btn onClick={() => navigator.share?.({title:event.title,url:window.location.href})} variant="ghost" size="sm"><I n="Share" s={16} c="currentColor" /></Btn>
+                {isHost && !event.cancelled && <Btn onClick={() => onStartGame(event)} size="sm" icon="Zap">Start</Btn>}
+                {isHost && (
+                  <div style={{ position:'relative' }}>
+                    <Btn onClick={() => setEventMenuOpen(o => !o)} variant="ghost" size="sm"><I n="MoreVertical" s={18} c="currentColor" /></Btn>
+                    {eventMenuOpen && (
+                      <div onClick={e => e.stopPropagation()} style={{ position:'absolute', top:'100%', right:0, marginTop:'4px', background:'var(--bg2)', border:'1px solid var(--border2)', borderRadius:'var(--radius2)', boxShadow:'0 8px 24px rgba(0,0,0,0.5)', zIndex:300, minWidth:'150px', overflow:'hidden' }}>
+                        <button onClick={() => { openEditEvent(); setEventMenuOpen(false); }} style={{ width:'100%', padding:'12px 16px', background:'none', border:'none', color:'var(--text)', fontSize:'13px', fontWeight:'600', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:'10px', borderBottom:'1px solid var(--border)' }}>
+                          <I n="Edit" s={14} c="var(--text2)" /> Edit Event
+                        </button>
+                        <button onClick={() => { setShowCancelConfirm(true); setEventMenuOpen(false); }} style={{ width:'100%', padding:'12px 16px', background:'none', border:'none', color:'var(--red)', fontSize:'13px', fontWeight:'600', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:'10px' }}>
+                          <I n="Trash" s={14} c="var(--red)" /> Cancel Event
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             } />
 
@@ -1747,6 +1895,7 @@
             <div style={{ textAlign:'center', marginBottom:'20px' }}>
               <div style={{ display:'flex', justifyContent:'center', gap:'6px', marginBottom:'10px', flexWrap:'wrap' }}>
                 <Badge color={event.isPrivate ? 'amber' : 'blue'}>{event.isPrivate ? 'Private' : 'Open'}</Badge>
+                {event.cancelled && <Badge color="red">Cancelled</Badge>}
                 {isFull && !isGoing && <Badge color="red">Full</Badge>}
                 {waitlist.length > 0 && isHost && <Badge color="purple">{waitlist.length} waiting</Badge>}
               </div>
@@ -1772,8 +1921,25 @@
               </div>
             </div>
 
+            {/* Cancelled banner */}
+            {event.cancelled && (
+              <div style={{ background:'rgba(248,113,113,0.12)', border:'1px solid rgba(248,113,113,0.3)', borderRadius:'var(--radius2)', padding:'12px 16px', marginBottom:'16px', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', color:'var(--red)', fontWeight:'700', fontSize:'14px' }}>
+                <I n="X" s={15} c="var(--red)" /> This event has been cancelled
+              </div>
+            )}
+
+            {/* Calendar + Share action bar */}
+            <div style={{ display:'flex', gap:'8px', justifyContent:'center', marginBottom:'16px' }}>
+              <button onClick={addToCalendar} style={{ display:'flex', alignItems:'center', gap:'6px', padding:'9px 16px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius2)', color:'var(--text2)', fontSize:'13px', fontWeight:'600', cursor:'pointer', transition:'background 0.15s' }}>
+                <I n="Calendar" s={15} c="var(--text2)" /> Add to Calendar
+              </button>
+              <button onClick={shareEvent} style={{ display:'flex', alignItems:'center', gap:'6px', padding:'9px 16px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius2)', color:'var(--text2)', fontSize:'13px', fontWeight:'600', cursor:'pointer', transition:'background 0.15s' }}>
+                <I n="Share" s={15} c="var(--text2)" /> Share
+              </button>
+            </div>
+
             {/* RSVP */}
-            <div style={{ marginBottom:'20px' }}>
+            {!event.cancelled && <div style={{ marginBottom:'20px' }}>
               {!isHost && !isGoing && !isOnWaitlist && (
                 isFull
                   ? (event.allowWaitlist !== false
@@ -1792,7 +1958,7 @@
               {(isGoing || isOnWaitlist) && !isHost && (
                 <button onClick={() => handleRSVP('leave')} style={{ width:'100%', padding:'10px', background:'none', border:'none', color:'var(--text3)', fontSize:'13px', cursor:'pointer', marginTop:'6px' }}>Can't make it anymore</button>
               )}
-            </div>
+            </div>}
 
             {/* ── CONFIRMED PLAYERS ── */}
             {going.length > 0 && (
@@ -1927,13 +2093,15 @@
                   <div style={{ fontSize:'13px' }}>Be the first to say something!</div>
                 </div>
               ) : (
-                <div style={{ display:'flex', flexDirection:'column' }}>
+                <div style={{ display:'flex', flexDirection:'column' }} onClick={() => setCommentActiveMenu(null)}>
                   {comments.map((comment, ci) => {
                     const isMe = comment.authorId === currentUser?.uid;
                     const liked = (comment.likes||[]).includes(currentUser?.uid);
                     const likeCount = (comment.likes||[]).length;
                     const isReply = !!comment.replyTo;
                     const nextIsReply = ci < comments.length - 1 && !!comments[ci+1]?.replyTo;
+                    const menuOpen = commentActiveMenu === comment.id;
+                    const isEditing = editingComment === comment.id;
                     return (
                       <div key={comment.id} style={{ marginLeft: isReply ? '44px' : '0', paddingLeft: isReply ? '12px' : '0', borderLeft: isReply ? '2px solid var(--border2)' : 'none', marginTop: isReply ? '0' : ci > 0 ? '4px' : '0' }}>
                         <div style={{ padding: isReply ? '10px 0' : '14px 0', borderBottom: !nextIsReply && ci < comments.length-1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
@@ -1944,23 +2112,59 @@
                                 <span style={{ fontSize: isReply ? '12px' : '13px', fontWeight:'700', color:'var(--text)' }}>{comment.authorName?.split(' ')[0]}</span>
                                 {isMe && <span style={{ fontSize:'11px', color:'var(--text3)' }}>· you</span>}
                                 {isReply && <span style={{ fontSize:'11px', color:'var(--accent)', fontWeight:'600' }}>↩ {comment.replyTo.authorName?.split(' ')[0]}</span>}
-                                <span style={{ fontSize:'11px', color:'var(--text3)', marginLeft:'auto' }}>{fmtTime(comment.createdAt)}</span>
-                              </div>
-                              <div style={{ fontSize: isReply ? '13px' : '14px', lineHeight:'1.55', color:'var(--text)', wordBreak:'break-word' }}>
-                                {renderText(comment.text)}
-                              </div>
-                              {/* Actions */}
-                              <div style={{ display:'flex', alignItems:'center', gap:'14px', marginTop:'6px' }}>
-                                <button onClick={() => toggleLike(comment)} style={{ display:'flex', alignItems:'center', gap:'4px', background:'none', border:'none', cursor:'pointer', color: liked ? '#f87171' : 'var(--text3)', fontSize:'12px', fontWeight:'600', padding:0, transition:'color 0.15s' }}>
-                                  <span style={{ fontSize:'13px' }}>{liked ? '❤️' : '🤍'}</span>
-                                  {likeCount > 0 && <span>{likeCount}</span>}
-                                </button>
-                                {!isReply && (
-                                  <button onClick={() => { setReplyingTo({ id:comment.id, authorName:comment.authorName, text:comment.text }); inputRef.current?.focus(); }} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text3)', fontSize:'12px', fontWeight:'600', padding:0 }}>
-                                    Reply
-                                  </button>
+                                <span style={{ fontSize:'11px', color:'var(--text3)', marginLeft:'auto' }}>{fmtTime(comment.createdAt)}{comment.editedAt ? ' · edited' : ''}</span>
+                                {/* ··· menu button — only for own comments */}
+                                {isMe && (
+                                  <div style={{ position:'relative' }}>
+                                    <button onClick={e => { e.stopPropagation(); setCommentActiveMenu(menuOpen ? null : comment.id); }} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text3)', padding:'2px 4px', fontSize:'16px', lineHeight:1, borderRadius:'6px' }}>···</button>
+                                    {menuOpen && (
+                                      <div onClick={e => e.stopPropagation()} style={{ position:'absolute', top:'100%', right:0, background:'var(--bg2)', border:'1px solid var(--border2)', borderRadius:'var(--radius2)', boxShadow:'0 8px 24px rgba(0,0,0,0.5)', zIndex:200, minWidth:'130px', overflow:'hidden' }}>
+                                        <button onClick={() => { setEditingComment(comment.id); setEditText(comment.text); setCommentActiveMenu(null); }} style={{ width:'100%', padding:'11px 14px', background:'none', border:'none', color:'var(--text)', fontSize:'13px', fontWeight:'600', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:'8px', borderBottom:'1px solid var(--border)' }}>
+                                          <I n="Edit" s={13} c="var(--text2)" /> Edit
+                                        </button>
+                                        <button onClick={() => deleteComment(comment.id)} style={{ width:'100%', padding:'11px 14px', background:'none', border:'none', color:'var(--red)', fontSize:'13px', fontWeight:'600', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:'8px' }}>
+                                          <I n="Trash" s={13} c="var(--red)" /> Delete
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
                               </div>
+                              {/* Inline edit box */}
+                              {isEditing ? (
+                                <div style={{ marginTop:'4px' }}>
+                                  <textarea
+                                    value={editText}
+                                    onChange={e => setEditText(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEditComment(); } if (e.key === 'Escape') { setEditingComment(null); } }}
+                                    autoFocus
+                                    rows={2}
+                                    style={{ width:'100%', background:'var(--surface)', border:'1px solid var(--accent)', borderRadius:'var(--radius3)', padding:'8px 10px', color:'var(--text)', fontSize:'13px', outline:'none', resize:'none', fontFamily:'inherit', lineHeight:'1.5', boxSizing:'border-box' }}
+                                  />
+                                  <div style={{ display:'flex', gap:'6px', marginTop:'6px' }}>
+                                    <button onClick={saveEditComment} disabled={!editText.trim()} style={{ padding:'6px 14px', borderRadius:'var(--radius3)', background:'var(--accent)', border:'none', color:'#050a14', fontSize:'12px', fontWeight:'700', cursor:'pointer' }}>Save</button>
+                                    <button onClick={() => { setEditingComment(null); setEditText(''); }} style={{ padding:'6px 12px', borderRadius:'var(--radius3)', background:'var(--surface)', border:'1px solid var(--border)', color:'var(--text2)', fontSize:'12px', fontWeight:'600', cursor:'pointer' }}>Cancel</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div style={{ fontSize: isReply ? '13px' : '14px', lineHeight:'1.55', color:'var(--text)', wordBreak:'break-word' }}>
+                                  {renderText(comment.text)}
+                                </div>
+                              )}
+                              {/* Actions — hide while editing */}
+                              {!isEditing && (
+                                <div style={{ display:'flex', alignItems:'center', gap:'14px', marginTop:'6px' }}>
+                                  <button onClick={() => toggleLike(comment)} style={{ display:'flex', alignItems:'center', gap:'4px', background:'none', border:'none', cursor:'pointer', color: liked ? '#f87171' : 'var(--text3)', fontSize:'12px', fontWeight:'600', padding:0, transition:'color 0.15s' }}>
+                                    <span style={{ fontSize:'13px' }}>{liked ? '❤️' : '🤍'}</span>
+                                    {likeCount > 0 && <span>{likeCount}</span>}
+                                  </button>
+                                  {!isReply && (
+                                    <button onClick={() => { setReplyingTo({ id:comment.id, authorName:comment.authorName, text:comment.text }); inputRef.current?.focus(); }} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text3)', fontSize:'12px', fontWeight:'600', padding:0 }}>
+                                      Reply
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1972,6 +2176,82 @@
             </div>
           </div>
         </div>
+
+        {/* ── CANCELLED BANNER (inline, below hero) ── */}
+
+        {/* ── EDIT EVENT MODAL ── */}
+        {showEditEvent && editEventForm && (
+          <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', backdropFilter:'blur(6px)', zIndex:500, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={() => setShowEditEvent(false)}>
+            <div style={{ width:'100%', maxWidth:'500px', background:'var(--bg2)', borderRadius:'24px 24px 0 0', overflow:'hidden', animation:'slideUpFull 0.3s ease-out', paddingBottom:'env(safe-area-inset-bottom)', maxHeight:'90vh', display:'flex', flexDirection:'column' }} onClick={e => e.stopPropagation()}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'20px 20px 16px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+                <button onClick={() => setShowEditEvent(false)} style={{ background:'var(--surface)', border:'none', borderRadius:'10px', padding:'8px 14px', color:'var(--text2)', fontSize:'14px', fontWeight:'600', cursor:'pointer' }}>Cancel</button>
+                <div style={{ fontWeight:'800', fontSize:'16px' }}>Edit Event</div>
+                <button onClick={saveEditEvent} disabled={savingEdit || !editEventForm.title.trim()} style={{ background:'var(--accent)', border:'none', borderRadius:'10px', padding:'8px 16px', color:'#050a14', fontSize:'14px', fontWeight:'700', cursor:'pointer', opacity: savingEdit ? 0.6 : 1 }}>{savingEdit ? 'Saving…' : 'Save'}</button>
+              </div>
+              <div style={{ overflowY:'auto', padding:'20px', display:'flex', flexDirection:'column', gap:'14px' }}>
+                <Input label="Title" value={editEventForm.title} onChange={e => setEditEventForm(f=>({...f,title:e.target.value}))} placeholder="Event title" />
+                <Input label="Location" value={editEventForm.location} onChange={e => setEditEventForm(f=>({...f,location:e.target.value}))} placeholder="Court or venue" />
+                <Textarea label="Notes (optional)" value={editEventForm.notes} onChange={e => setEditEventForm(f=>({...f,notes:e.target.value}))} placeholder="Any info for players..." style={{ minHeight:'70px' }} />
+                <div style={{ display:'flex', gap:'10px' }}>
+                  <div onClick={() => setShowEditDatePicker(true)} style={{ flex:'1 1 55%', display:'flex', alignItems:'center', gap:'10px', padding:'13px 16px', background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:'var(--radius2)', cursor:'pointer' }}>
+                    <I n="Calendar" s={17} c="var(--accent)" />
+                    <span style={{ fontSize:'14px', fontWeight:'700' }}>{editEventForm.date instanceof Date ? editEventForm.date.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) : ''}</span>
+                  </div>
+                  <div onClick={() => setShowEditTimePicker(true)} style={{ flex:'1 1 45%', display:'flex', alignItems:'center', gap:'10px', padding:'13px 16px', background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:'var(--radius2)', cursor:'pointer' }}>
+                    <I n="Clock" s={17} c="var(--accent)" />
+                    <span style={{ fontSize:'14px', fontWeight:'700' }}>{String(editEventForm.hour).padStart(2,'0')}:{String(editEventForm.minute).padStart(2,'0')} {editEventForm.ampm}</span>
+                  </div>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', background:'var(--surface)', borderRadius:'var(--radius2)', border:'1px solid var(--border)' }}>
+                  <span style={{ fontSize:'14px', fontWeight:'600' }}>Private event</span>
+                  <div onClick={() => setEditEventForm(f=>({...f,isPrivate:!f.isPrivate}))} style={{ width:'44px', height:'24px', borderRadius:'12px', background:editEventForm.isPrivate?'var(--accent)':'var(--surface2)', border:'1px solid var(--border)', cursor:'pointer', position:'relative', transition:'background 0.2s' }}>
+                    <div style={{ position:'absolute', top:'2px', left:editEventForm.isPrivate?'20px':'2px', width:'18px', height:'18px', borderRadius:'50%', background:'white', transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.3)' }} />
+                  </div>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', background:'var(--surface)', borderRadius:'var(--radius2)', border:'1px solid var(--border)' }}>
+                  <span style={{ fontSize:'14px', fontWeight:'600' }}>Allow waitlist</span>
+                  <div onClick={() => setEditEventForm(f=>({...f,allowWaitlist:!f.allowWaitlist}))} style={{ width:'44px', height:'24px', borderRadius:'12px', background:editEventForm.allowWaitlist?'var(--accent)':'var(--surface2)', border:'1px solid var(--border)', cursor:'pointer', position:'relative', transition:'background 0.2s' }}>
+                    <div style={{ position:'absolute', top:'2px', left:editEventForm.allowWaitlist?'20px':'2px', width:'18px', height:'18px', borderRadius:'50%', background:'white', transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.3)' }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Date picker for edit event */}
+        {showEditDatePicker && editEventForm && (
+          <DatePickerModal
+            date={editEventForm.date}
+            onConfirm={d => { setEditEventForm(f => ({...f, date: d})); setShowEditDatePicker(false); }}
+            onClose={() => setShowEditDatePicker(false)}
+          />
+        )}
+        {/* Time picker for edit event */}
+        {showEditTimePicker && editEventForm && (
+          <TimePickerModal
+            hour={editEventForm.hour} minute={editEventForm.minute} ampm={editEventForm.ampm}
+            onConfirm={(h,m,ap) => { setEditEventForm(f => ({...f, hour:h, minute:m, ampm:ap})); setShowEditTimePicker(false); }}
+            onClose={() => setShowEditTimePicker(false)}
+          />
+        )}
+
+        {/* ── CANCEL EVENT CONFIRM ── */}
+        {showCancelConfirm && (
+          <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', backdropFilter:'blur(6px)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' }} onClick={() => setShowCancelConfirm(false)}>
+            <div style={{ width:'100%', maxWidth:'340px', background:'var(--bg2)', borderRadius:'var(--radius)', padding:'28px 24px', textAlign:'center' }} onClick={e => e.stopPropagation()}>
+              <div style={{ fontSize:'36px', marginBottom:'12px' }}>⚠️</div>
+              <div style={{ fontSize:'18px', fontWeight:'800', marginBottom:'8px' }}>Cancel this event?</div>
+              <div style={{ fontSize:'14px', color:'var(--text2)', lineHeight:'1.55', marginBottom:'24px' }}>
+                All {going.length} confirmed player{going.length !== 1 ? 's' : ''} will see this event marked as cancelled. This can't be undone.
+              </div>
+              <div style={{ display:'flex', gap:'10px' }}>
+                <button onClick={() => setShowCancelConfirm(false)} style={{ flex:1, padding:'13px', borderRadius:'var(--radius)', background:'var(--surface)', border:'1px solid var(--border)', color:'var(--text)', fontSize:'14px', fontWeight:'600', cursor:'pointer' }}>Keep it</button>
+                <button onClick={cancelEvent} style={{ flex:1, padding:'13px', borderRadius:'var(--radius)', background:'rgba(248,113,113,0.15)', border:'1px solid rgba(248,113,113,0.4)', color:'var(--red)', fontSize:'14px', fontWeight:'700', cursor:'pointer' }}>Cancel Event</button>
+              </div>
+            </div>
+          </div>
+        )}
       );
     }
 
@@ -2173,9 +2453,11 @@
           .onSnapshot(s => { setCoaches(s.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); }, () => setLoading(false));
       }, []);
 
+      const todayDay = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date().getDay()];
       const filtered = coaches.filter(c => {
-        if (!search) return true;
-        return `${c.firstName} ${c.lastName} ${c.coachProfile?.specialties?.join(' ')||''}`.toLowerCase().includes(search.toLowerCase());
+        const matchesSearch = !search || `${c.firstName} ${c.lastName} ${c.coachProfile?.specialties?.join(' ')||''}`.toLowerCase().includes(search.toLowerCase());
+        const matchesAvail = filter !== 'available' || (c.coachProfile?.availability||[]).some(a => a.toLowerCase().startsWith(todayDay.toLowerCase()));
+        return matchesSearch && matchesAvail;
       });
 
       return (
@@ -2288,6 +2570,9 @@
       const [text, setText] = useState('');
       const [sending, setSending] = useState(false);
       const [sendError, setSendError] = useState('');
+      const [editingMsg, setEditingMsg] = useState(null); // message id
+      const [editMsgText, setEditMsgText] = useState('');
+      const [activeMsgMenu, setActiveMsgMenu] = useState(null); // message id
       const bottomRef = useRef(null);
       const inputRef = useRef(null);
 
@@ -2318,14 +2603,12 @@
         setSending(true);
         setSendError('');
         const savedText = t;
-        setText('');
-        inputRef.current?.focus();
+        // Don't clear text until we know Firestore accepted it
         try {
           // Upsert the thread doc first so subcollection write always has a parent
           await db.collection('dms').doc(threadId).set({
             participants: [currentUser.uid, partner.oderId],
-            lastMessage: savedText,
-            lastAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
           // Then add the message
           await db.collection('dms').doc(threadId).collection('messages').add({
@@ -2334,14 +2617,37 @@
             senderName: `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'You',
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           });
-          setTimeout(() => bottomRef.current?.scrollIntoView({ behavior:'smooth' }), 80);
+          // Only clear on success
+          setText('');
+          setTimeout(() => { bottomRef.current?.scrollIntoView({ behavior:'smooth' }); inputRef.current?.focus(); }, 80);
         } catch(err) {
-          console.error('DM send error:', err);
-          setText(savedText); // restore text so user doesn't lose their message
-          setSendError('Failed to send. Check your connection.');
+          console.error('DM send error:', err.code, err.message);
+          const msg = err.code === 'permission-denied'
+            ? 'Permission denied. Check Firestore rules.'
+            : err.code === 'unavailable'
+            ? 'No connection — try again.'
+            : `Send failed: ${err.message}`;
+          setSendError(msg);
         } finally {
           setSending(false);
         }
+      };
+
+      const deleteMsg = async (msgId) => {
+        try {
+          await db.collection('dms').doc(threadId).collection('messages').doc(msgId).delete();
+        } catch(e) { console.error('Delete msg error:', e); }
+        setActiveMsgMenu(null);
+      };
+
+      const saveEditMsg = async () => {
+        const newText = editMsgText.trim();
+        if (!newText || !editingMsg) return;
+        try {
+          await db.collection('dms').doc(threadId).collection('messages').doc(editingMsg).update({ text: newText, editedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        } catch(e) { console.error('Edit msg error:', e); }
+        setEditingMsg(null);
+        setEditMsgText('');
       };
 
       const fmtTime = (ts) => {
@@ -2366,7 +2672,7 @@
             </div>
 
             {/* Messages */}
-            <div style={{ flex:1, overflowY:'auto', padding:'16px 20px', display:'flex', flexDirection:'column', gap:'10px' }}>
+            <div style={{ flex:1, overflowY:'auto', padding:'16px 20px', display:'flex', flexDirection:'column', gap:'10px' }} onClick={() => setActiveMsgMenu(null)}>
               {messages.length === 0 && (
                 <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text3)', fontSize:'13px' }}>
                   <div style={{ fontSize:'32px', marginBottom:'8px' }}>💬</div>
@@ -2375,12 +2681,48 @@
               )}
               {messages.map(m => {
                 const mine = m.senderId === currentUser.uid;
+                const menuOpen = activeMsgMenu === m.id;
+                const isEditing = editingMsg === m.id;
                 return (
-                  <div key={m.id} style={{ display:'flex', flexDirection:'column', alignItems: mine ? 'flex-end' : 'flex-start' }}>
-                    <div style={{ maxWidth:'75%', padding:'10px 14px', borderRadius: mine ? '16px 16px 4px 16px' : '16px 16px 16px 4px', background: mine ? 'var(--accent)' : 'var(--surface)', color: mine ? '#050a14' : 'var(--text)', fontSize:'14px', lineHeight:'1.45', fontWeight: mine ? '600' : '400' }}>
-                      {m.text}
+                  <div key={m.id} onClick={() => setActiveMsgMenu(null)} style={{ display:'flex', flexDirection:'column', alignItems: mine ? 'flex-end' : 'flex-start' }}>
+                    <div style={{ position:'relative', maxWidth:'75%' }}>
+                      {/* Long-press / tap ··· for own messages */}
+                      {mine && !isEditing && (
+                        <div style={{ position:'absolute', top:'-8px', right:'-4px', zIndex:10 }}>
+                          <button onClick={e => { e.stopPropagation(); setActiveMsgMenu(menuOpen ? null : m.id); }} style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', padding:'2px 7px', fontSize:'13px', cursor:'pointer', color:'var(--text3)', lineHeight:1 }}>···</button>
+                          {menuOpen && (
+                            <div onClick={e => e.stopPropagation()} style={{ position:'absolute', top:'100%', right:0, marginTop:'4px', background:'var(--bg2)', border:'1px solid var(--border2)', borderRadius:'var(--radius2)', boxShadow:'0 8px 24px rgba(0,0,0,0.5)', zIndex:300, minWidth:'120px', overflow:'hidden' }}>
+                              <button onClick={() => { setEditingMsg(m.id); setEditMsgText(m.text); setActiveMsgMenu(null); }} style={{ width:'100%', padding:'11px 14px', background:'none', border:'none', color:'var(--text)', fontSize:'13px', fontWeight:'600', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:'8px', borderBottom:'1px solid var(--border)' }}>
+                                <I n="Edit" s={13} c="var(--text2)" /> Edit
+                              </button>
+                              <button onClick={() => deleteMsg(m.id)} style={{ width:'100%', padding:'11px 14px', background:'none', border:'none', color:'var(--red)', fontSize:'13px', fontWeight:'600', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:'8px' }}>
+                                <I n="Trash" s={13} c="var(--red)" /> Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {isEditing ? (
+                        <div style={{ minWidth:'200px' }}>
+                          <input
+                            value={editMsgText}
+                            onChange={e => setEditMsgText(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') saveEditMsg(); if (e.key === 'Escape') { setEditingMsg(null); } }}
+                            autoFocus
+                            style={{ width:'100%', padding:'10px 14px', background:'var(--surface)', border:'1px solid var(--accent)', borderRadius:'12px', color:'var(--text)', fontSize:'14px', outline:'none', boxSizing:'border-box' }}
+                          />
+                          <div style={{ display:'flex', gap:'6px', marginTop:'5px', justifyContent:'flex-end' }}>
+                            <button onClick={saveEditMsg} style={{ padding:'5px 12px', borderRadius:'10px', background:'var(--accent)', border:'none', color:'#050a14', fontSize:'12px', fontWeight:'700', cursor:'pointer' }}>Save</button>
+                            <button onClick={() => { setEditingMsg(null); setEditMsgText(''); }} style={{ padding:'5px 10px', borderRadius:'10px', background:'var(--surface)', border:'1px solid var(--border)', color:'var(--text2)', fontSize:'12px', cursor:'pointer' }}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ padding:'10px 14px', borderRadius: mine ? '16px 16px 4px 16px' : '16px 16px 16px 4px', background: mine ? 'var(--accent)' : 'var(--surface)', color: mine ? '#050a14' : 'var(--text)', fontSize:'14px', lineHeight:'1.45', fontWeight: mine ? '600' : '400' }}>
+                          {m.text}
+                        </div>
+                      )}
                     </div>
-                    <div style={{ fontSize:'10px', color:'var(--text3)', marginTop:'3px', paddingLeft:'4px', paddingRight:'4px' }}>{fmtTime(m.createdAt)}</div>
+                    <div style={{ fontSize:'10px', color:'var(--text3)', marginTop:'3px', paddingLeft:'4px', paddingRight:'4px' }}>{fmtTime(m.createdAt)}{m.editedAt ? ' · edited' : ''}</div>
                   </div>
                 );
               })}
@@ -2681,12 +3023,19 @@
 
       useEffect(() => {
         if (!currentUser) return;
-        db.collection('events').orderBy('dateTime','desc').limit(20).get()
+        db.collection('events').where('hostId','==',currentUser.uid)
+          .orderBy('dateTime','desc').limit(20).get()
           .then(s => {
-            const myGames = s.docs.map(d=>({id:d.id,...d.data()}))
-              .filter(g => (g.rsvps||[]).some(r => r.oderId === currentUser.uid && r.status==='going'));
-            setGameHistory(myGames);
-          }).catch(()=>{});
+            setGameHistory(s.docs.map(d=>({id:d.id,...d.data()})));
+          }).catch(() => {
+            // Fallback: fetch all and filter client-side (for events where user is player not host)
+            db.collection('events').orderBy('dateTime','desc').limit(50).get()
+              .then(s2 => {
+                const myGames = s2.docs.map(d=>({id:d.id,...d.data()}))
+                  .filter(g => (g.rsvps||[]).some(r => r.oderId === currentUser.uid && r.status==='going'));
+                setGameHistory(myGames);
+              }).catch(()=>{});
+          });
       }, [currentUser]);
 
       const save = async () => {
@@ -3055,7 +3404,7 @@
       const [selected, setSelected] = useState([]);           // pre-selection buffer
       const [totalMs, setTotalMs] = useState(saved?.totalMs || 0);
       const [isRunning, setIsRunning] = useState(saved?.isRunning || false);
-      const [isPaused, setIsPaused] = useState(saved ? true : false); // always resume paused so timer doesn't jump
+      const [isPaused, setIsPaused] = useState(saved?.isRunning ? true : false); // only start paused if game was running
       const [phase, setPhase] = useState('game');
       const [winnerAnim, setWinnerAnim] = useState(null);
       const [showConfetti, setShowConfetti] = useState(false);
@@ -3227,6 +3576,8 @@
         const lb = getLeaderboard();
         const topId = lb[0]?.id;
         for (const p of gamePlayers) {
+          // Skip manual (non-registered) players - they have no Firestore user doc
+          if (!p.id || p.id.startsWith('manual_') || p.id === 'host') continue;
           const s = gameStats[p.id] || {};
           try {
             await db.collection('users').doc(p.id).update({
@@ -3588,7 +3939,6 @@
       const [eventId, setEventId] = useState(null);
       const [liveGame, setLiveGame] = useState(null);
       const [instantPlayers, setInstantPlayers] = useState(null);
-      const [instantFormat, setInstantFormat] = useState('kings');
 
       // ── on login, check for a saved game session and route back in ──
       const [recoveredPlayers, setRecoveredPlayers] = useState(null);
@@ -3624,10 +3974,10 @@
       if (recoveredPlayers) return <LiveGameScreen players={recoveredPlayers} format="kings" onBack={() => { try { localStorage.removeItem(GAME_SESSION_KEY); } catch(e){} setRecoveredPlayers(null); }} />;
 
       if (liveGame) return <LiveGameScreen event={liveGame} onBack={() => { try { localStorage.removeItem(GAME_SESSION_KEY); } catch(e){} setLiveGame(null); }} />;
-      if (instantPlayers) return <LiveGameScreen players={instantPlayers} format={instantFormat} onBack={() => { try { localStorage.removeItem(GAME_SESSION_KEY); } catch(e){} setInstantPlayers(null); }} />;
+      if (instantPlayers) return <LiveGameScreen players={instantPlayers} format="kings" onBack={() => { try { localStorage.removeItem(GAME_SESSION_KEY); } catch(e){} setInstantPlayers(null); }} />;
 
-      const handleInstantGame = (players, format) => {
-        if (players) { setInstantPlayers(players); setInstantFormat(format); }
+      const handleInstantGame = (players) => {
+        if (players) { setInstantPlayers(players); }
       };
 
       const navItems = [
@@ -3639,16 +3989,20 @@
 
       const showNav = !['create'].includes(screen) && !eventId;
 
+      // Scroll to top on every screen/route change
+      const screenKey = screen + (eventId || '');
+      React.useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [screenKey]);
+
       return (
         <>
-          {screen === 'home' && !eventId && <HomeScreen onCreateEvent={() => setScreen('create')} onViewEvent={id => { setEventId(id); setScreen('events'); }} onInstantGame={handleInstantGame} setScreen={setScreen} />}
-          {screen === 'events' && !eventId && <EventsScreen onViewEvent={id => setEventId(id)} onCreateEvent={() => setScreen('create')} />}
-          {screen === 'events' && eventId && <EventDetailScreen eventId={eventId} onBack={() => setEventId(null)} onStartGame={e => setLiveGame(e)} />}
-          {screen === 'create' && <CreateEventScreen onBack={() => setScreen('home')} onCreated={id => { setEventId(id); setScreen('events'); }} />}
-          {screen === 'courts' && <CourtsScreen setScreen={setScreen} />}
-          {screen === 'coaches' && <CoachesScreen />}
-          {screen === 'players' && <PlayersScreen />}
-          {screen === 'profile' && <ProfileScreen onLogout={() => setScreen('home')} setScreen={setScreen} />}
+          {screen === 'home' && !eventId && <HomeScreen key="home" onCreateEvent={() => setScreen('create')} onViewEvent={id => { setEventId(id); setScreen('events'); }} onInstantGame={handleInstantGame} setScreen={setScreen} />}
+          {screen === 'events' && !eventId && <EventsScreen key="events" onViewEvent={id => setEventId(id)} onCreateEvent={() => setScreen('create')} />}
+          {screen === 'events' && eventId && <EventDetailScreen key={'event-'+eventId} eventId={eventId} onBack={() => setEventId(null)} onStartGame={e => setLiveGame(e)} />}
+          {screen === 'create' && <CreateEventScreen key="create" onBack={() => setScreen('home')} onCreated={id => { setEventId(id); setScreen('events'); }} />}
+          {screen === 'courts' && <CourtsScreen key="courts" setScreen={setScreen} />}
+          {screen === 'coaches' && <CoachesScreen key="coaches" />}
+          {screen === 'players' && <PlayersScreen key="players" />}
+          {screen === 'profile' && <ProfileScreen key="profile" onLogout={() => setScreen('home')} setScreen={setScreen} />}
 
           {showNav && (
             <nav style={{ position:'fixed', bottom:0, left:0, right:0, background:'var(--bg2)', borderTop:'1px solid var(--border)', display:'flex', justifyContent:'space-around', zIndex:1000, paddingBottom:'max(8px, env(safe-area-inset-bottom))', paddingTop:'8px' }}>
