@@ -122,8 +122,15 @@
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCDCVnaHaaRmOMJ1iZQrT2ZA_zQd6nDg-o&libraries=places&callback=Function.prototype" async defer onerror="window.googleMapsError=true"></script>
 
   <!-- React + ReactDOM -->
-  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+  <script>
+    // Fallback if cdnjs fails
+    if (!window.React) {
+      document.write('<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"><\/script>');
+      document.write('<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"><\/script>');
+    }
+  </script>
 
   <!-- Firebase init -->
   <script>
@@ -4919,7 +4926,7 @@ function EventDetailScreen({
   onBack,
   onStartGame
 }) {
-  var _event$locationCoords, _event$locationCoords2, _event$dateTime5, _replyingTo$authorNam, _replyingTo$authorNam2;
+  var _event$locationCoords3, _event$locationCoords4, _event$dateTime6, _replyingTo$authorNam, _replyingTo$authorNam2, _event$dateTime7;
   const {
     currentUser,
     userProfile
@@ -4956,6 +4963,8 @@ function EventDetailScreen({
   const [editShowManualPlayer, setEditShowManualPlayer] = useState(false);
   const [editManualPlayerName, setEditManualPlayerName] = useState('');
   const [weather, setWeather] = useState(null);
+  const [showCalendarPicker, setShowCalendarPicker] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const inputRef = useRef(null);
   const discussionRef = useRef(null);
   useEffect(() => {
@@ -4983,51 +4992,57 @@ function EventDetailScreen({
     }, () => {});
   }, [eventId]);
 
-  // Fetch weather for event location + time window (event time to +4h)
+  // Fetch weather — uses locationCoords if present, else geocodes the location string
   useEffect(() => {
-    var _event$dateTime;
-    if (!(event !== null && event !== void 0 && event.locationCoords) || !(event !== null && event !== void 0 && event.dateTime)) return;
-    const {
-      lat,
-      lng
-    } = event.locationCoords;
-    const eventDate = (_event$dateTime = event.dateTime) !== null && _event$dateTime !== void 0 && _event$dateTime.toDate ? event.dateTime.toDate() : new Date(event.dateTime);
-    const dateStr = eventDate.toISOString().split('T')[0];
-    const startHour = eventDate.getHours();
-    const endHour = Math.min(startHour + 4, 23);
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=temperature_2m,uv_index&temperature_unit=fahrenheit&forecast_days=3&timezone=auto`;
-    fetch(url).then(r => r.json()).then(data => {
-      var _data$hourly, _data$hourly2, _data$hourly3;
-      const times = ((_data$hourly = data.hourly) === null || _data$hourly === void 0 ? void 0 : _data$hourly.time) || [];
-      const temps = ((_data$hourly2 = data.hourly) === null || _data$hourly2 === void 0 ? void 0 : _data$hourly2.temperature_2m) || [];
-      const uvs = ((_data$hourly3 = data.hourly) === null || _data$hourly3 === void 0 ? void 0 : _data$hourly3.uv_index) || [];
-      // Find indices matching our date and hour window
-      const indices = times.reduce((acc, t, i) => {
-        const d = new Date(t);
-        if (d.toDateString() === eventDate.toDateString() && d.getHours() >= startHour && d.getHours() <= endHour) acc.push(i);
-        return acc;
-      }, []);
-      if (indices.length === 0) return;
-      const windowTemps = indices.map(i => temps[i]).filter(t => t != null);
-      const windowUVs = indices.map(i => uvs[i]).filter(u => u != null);
-      if (!windowTemps.length) return;
-      const tempLow = Math.round(Math.min(...windowTemps));
-      const tempHigh = Math.round(Math.max(...windowTemps));
-      const uvLow = Math.round(Math.min(...windowUVs) * 10) / 10;
-      const uvHigh = Math.round(Math.max(...windowUVs) * 10) / 10;
-      // Pick icon based on max UV and temp
-      const avgTemp = (tempLow + tempHigh) / 2;
-      const maxUV = uvHigh;
-      let icon = maxUV > 6 ? '☀️' : maxUV > 3 ? '🌤️' : avgTemp < 50 ? '🌥️' : '⛅';
-      setWeather({
-        tempLow,
-        tempHigh,
-        uvLow,
-        uvHigh,
-        icon
-      });
-    }).catch(() => {});
-  }, [event === null || event === void 0 || (_event$locationCoords = event.locationCoords) === null || _event$locationCoords === void 0 ? void 0 : _event$locationCoords.lat, event === null || event === void 0 || (_event$locationCoords2 = event.locationCoords) === null || _event$locationCoords2 === void 0 ? void 0 : _event$locationCoords2.lng, event === null || event === void 0 ? void 0 : event.dateTime]);
+    var _event$locationCoords, _event$locationCoords2;
+    if (!(event !== null && event !== void 0 && event.dateTime)) return;
+    const doFetch = (lat, lng) => {
+      var _event$dateTime;
+      const eventDate = (_event$dateTime = event.dateTime) !== null && _event$dateTime !== void 0 && _event$dateTime.toDate ? event.dateTime.toDate() : new Date(event.dateTime);
+      const startHour = eventDate.getHours();
+      const endHour = Math.min(startHour + 4, 23);
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=temperature_2m,uv_index&temperature_unit=fahrenheit&forecast_days=3&timezone=auto`;
+      fetch(url).then(r => r.json()).then(data => {
+        var _data$hourly, _data$hourly2, _data$hourly3;
+        const times = ((_data$hourly = data.hourly) === null || _data$hourly === void 0 ? void 0 : _data$hourly.time) || [];
+        const temps = ((_data$hourly2 = data.hourly) === null || _data$hourly2 === void 0 ? void 0 : _data$hourly2.temperature_2m) || [];
+        const uvs = ((_data$hourly3 = data.hourly) === null || _data$hourly3 === void 0 ? void 0 : _data$hourly3.uv_index) || [];
+        const indices = times.reduce((acc, t, i) => {
+          const d = new Date(t);
+          if (d.toDateString() === eventDate.toDateString() && d.getHours() >= startHour && d.getHours() <= endHour) acc.push(i);
+          return acc;
+        }, []);
+        if (indices.length === 0) return;
+        const windowTemps = indices.map(i => temps[i]).filter(t => t != null);
+        const windowUVs = indices.map(i => uvs[i]).filter(u => u != null);
+        if (!windowTemps.length) return;
+        const tempLow = Math.round(Math.min(...windowTemps));
+        const tempHigh = Math.round(Math.max(...windowTemps));
+        const uvLow = Math.round(Math.min(...windowUVs) * 10) / 10;
+        const uvHigh = Math.round(Math.max(...windowUVs) * 10) / 10;
+        const maxUV = uvHigh;
+        const avgTemp = (tempLow + tempHigh) / 2;
+        let icon = maxUV > 6 ? '☀️' : maxUV > 3 ? '🌤️' : avgTemp < 50 ? '🌥️' : '⛅';
+        setWeather({
+          tempLow,
+          tempHigh,
+          uvLow,
+          uvHigh,
+          icon
+        });
+      }).catch(() => {});
+    };
+    if ((_event$locationCoords = event.locationCoords) !== null && _event$locationCoords !== void 0 && _event$locationCoords.lat && (_event$locationCoords2 = event.locationCoords) !== null && _event$locationCoords2 !== void 0 && _event$locationCoords2.lng) {
+      doFetch(event.locationCoords.lat, event.locationCoords.lng);
+    } else if (event.location) {
+      // Geocode the location string via Open-Meteo geocoding API
+      fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(event.location.split(',')[0])}&count=1&language=en&format=json`).then(r => r.json()).then(data => {
+        var _data$results;
+        const r = (_data$results = data.results) === null || _data$results === void 0 ? void 0 : _data$results[0];
+        if (r) doFetch(r.latitude, r.longitude);
+      }).catch(() => {});
+    }
+  }, [event === null || event === void 0 || (_event$locationCoords3 = event.locationCoords) === null || _event$locationCoords3 === void 0 ? void 0 : _event$locationCoords3.lat, event === null || event === void 0 || (_event$locationCoords4 = event.locationCoords) === null || _event$locationCoords4 === void 0 ? void 0 : _event$locationCoords4.lng, event === null || event === void 0 ? void 0 : event.location, event === null || event === void 0 ? void 0 : event.dateTime]);
   const handleRSVP = async action => {
     if (!currentUser || !event) return;
     const rsvps = event.rsvps || [];
@@ -5086,10 +5101,10 @@ function EventDetailScreen({
   };
 
   // Add to Calendar (builds .ics download)
-  const addToCalendar = () => {
+  const downloadICS = () => {
     var _event$dateTime2;
     const start = event !== null && event !== void 0 && (_event$dateTime2 = event.dateTime) !== null && _event$dateTime2 !== void 0 && _event$dateTime2.toDate ? event.dateTime.toDate() : new Date((event === null || event === void 0 ? void 0 : event.dateTime) || Date.now());
-    const end = new Date(start.getTime() + 90 * 60000); // 90 min default
+    const end = new Date(start.getTime() + 90 * 60000);
     const fmt = dt => dt.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
     const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Tennisverse//EN', 'BEGIN:VEVENT', `UID:${eventId}@tennisverse`, `DTSTART:${fmt(start)}`, `DTEND:${fmt(end)}`, `SUMMARY:${event.title}`, event.location ? `LOCATION:${event.location}` : '', event.notes ? `DESCRIPTION:${event.notes.replace(/\n/g, '\\n')}` : '', 'END:VEVENT', 'END:VCALENDAR'].filter(Boolean).join('\r\n');
     const blob = new Blob([ics], {
@@ -5102,11 +5117,31 @@ function EventDetailScreen({
     a.click();
     URL.revokeObjectURL(url);
   };
-
-  // Share event
-  const shareEvent = async () => {
+  const addToCalendar = () => setShowCalendarPicker(true);
+  const addToGoogleCalendar = () => {
     var _event$dateTime3;
-    const dt = event !== null && event !== void 0 && (_event$dateTime3 = event.dateTime) !== null && _event$dateTime3 !== void 0 && _event$dateTime3.toDate ? event.dateTime.toDate() : new Date((event === null || event === void 0 ? void 0 : event.dateTime) || Date.now());
+    const start = event !== null && event !== void 0 && (_event$dateTime3 = event.dateTime) !== null && _event$dateTime3 !== void 0 && _event$dateTime3.toDate ? event.dateTime.toDate() : new Date((event === null || event === void 0 ? void 0 : event.dateTime) || Date.now());
+    const end = new Date(start.getTime() + 90 * 60000);
+    const fmt = dt => dt.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: event.title,
+      dates: `${fmt(start)}/${fmt(end)}`,
+      details: event.notes || `Tennis game on Tennisverse`,
+      location: event.location || ''
+    });
+    window.open(`https://calendar.google.com/calendar/render?${params}`, '_blank');
+  };
+
+  // Share event — deep link
+  const getEventDeepLink = () => {
+    const base = window.location.origin + window.location.pathname;
+    return `${base}#/events/${eventId}`;
+  };
+  const shareEvent = async () => {
+    var _event$dateTime4;
+    const link = getEventDeepLink();
+    const dt = event !== null && event !== void 0 && (_event$dateTime4 = event.dateTime) !== null && _event$dateTime4 !== void 0 && _event$dateTime4.toDate ? event.dateTime.toDate() : new Date((event === null || event === void 0 ? void 0 : event.dateTime) || Date.now());
     const shareData = {
       title: event === null || event === void 0 ? void 0 : event.title,
       text: `Join me for ${event === null || event === void 0 ? void 0 : event.title} on ${dt.toLocaleDateString('en-US', {
@@ -5114,7 +5149,7 @@ function EventDetailScreen({
         month: 'short',
         day: 'numeric'
       })}`,
-      url: window.location.href
+      url: link
     };
     if (navigator.share) {
       try {
@@ -5122,17 +5157,13 @@ function EventDetailScreen({
         return;
       } catch (e) {}
     }
-    // Fallback: copy URL
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      alert('Link copied!');
-    } catch (e) {}
+    setShowShareModal(true);
   };
 
   // Host: open edit modal pre-filled
   const openEditEvent = () => {
-    var _event$dateTime4;
-    const dt = event !== null && event !== void 0 && (_event$dateTime4 = event.dateTime) !== null && _event$dateTime4 !== void 0 && _event$dateTime4.toDate ? event.dateTime.toDate() : new Date((event === null || event === void 0 ? void 0 : event.dateTime) || Date.now());
+    var _event$dateTime5;
+    const dt = event !== null && event !== void 0 && (_event$dateTime5 = event.dateTime) !== null && _event$dateTime5 !== void 0 && _event$dateTime5.toDate ? event.dateTime.toDate() : new Date((event === null || event === void 0 ? void 0 : event.dateTime) || Date.now());
     let h = dt.getHours();
     const ampm = h >= 12 ? 'PM' : 'AM';
     h = h % 12 || 12;
@@ -5371,7 +5402,7 @@ function EventDetailScreen({
   const isOnWaitlist = waitlist.some(r => r.oderId === (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid));
   const isHost = event.hostId === (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid);
   const isFull = !!(event.maxPlayers && going.length >= event.maxPlayers && !isGoing);
-  const d = (_event$dateTime5 = event.dateTime) !== null && _event$dateTime5 !== void 0 && _event$dateTime5.toDate ? event.dateTime.toDate() : new Date(event.dateTime || Date.now());
+  const d = (_event$dateTime6 = event.dateTime) !== null && _event$dateTime6 !== void 0 && _event$dateTime6.toDate ? event.dateTime.toDate() : new Date(event.dateTime || Date.now());
 
   // Mention suggestions: going players minus self
   const mentionSuggestions = going.filter(p => p.oderId !== (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid) && `${p.firstName} ${p.lastName || ''}`.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 5);
@@ -7350,6 +7381,247 @@ function EventDetailScreen({
       setShowEditTimePicker(false);
     },
     onClose: () => setShowEditTimePicker(false)
+  }), showCalendarPicker && /*#__PURE__*/React.createElement("div", {
+    onClick: () => setShowCalendarPicker(false),
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.6)',
+      zIndex: 500,
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.stopPropagation(),
+    style: {
+      background: 'var(--bg2)',
+      borderRadius: 'var(--radius) var(--radius) 0 0',
+      width: '100%',
+      maxWidth: '500px',
+      padding: '20px 20px 40px',
+      animation: 'slideUpFull 0.2s ease-out'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '36px',
+      height: '4px',
+      background: 'var(--border2)',
+      borderRadius: '2px',
+      margin: '0 auto 20px'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '15px',
+      fontWeight: '700',
+      color: 'var(--text)',
+      marginBottom: '16px',
+      textAlign: 'center'
+    }
+  }, "Add to Calendar"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '10px'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      addToGoogleCalendar();
+      setShowCalendarPicker(false);
+    },
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '14px',
+      padding: '14px 16px',
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius2)',
+      cursor: 'pointer',
+      textAlign: 'left',
+      width: '100%'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '32px',
+      height: '32px',
+      borderRadius: '8px',
+      background: 'white',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z",
+    fill: "#4285F4"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z",
+    fill: "#34A853"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z",
+    fill: "#FBBC05"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z",
+    fill: "#EA4335"
+  }))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '14px',
+      fontWeight: '600',
+      color: 'var(--text)',
+      marginBottom: '2px'
+    }
+  }, "Google Calendar"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '12px',
+      color: 'var(--text3)'
+    }
+  }, "Opens in a new tab")), /*#__PURE__*/React.createElement(I, {
+    n: "ChevronRight",
+    s: 16,
+    c: "var(--text3)",
+    style: {
+      marginLeft: 'auto'
+    }
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      downloadICS();
+      setShowCalendarPicker(false);
+    },
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '14px',
+      padding: '14px 16px',
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius2)',
+      cursor: 'pointer',
+      textAlign: 'left',
+      width: '100%'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '32px',
+      height: '32px',
+      borderRadius: '8px',
+      background: 'linear-gradient(135deg, #1a1a1a, #3a3a3a)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "20",
+    height: "20",
+    viewBox: "0 0 24 24",
+    fill: "none"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "2",
+    y: "4",
+    width: "20",
+    height: "18",
+    rx: "3",
+    fill: "white"
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "2",
+    y: "4",
+    width: "20",
+    height: "7",
+    rx: "3",
+    fill: "#FF3B30"
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "2",
+    y: "8",
+    width: "20",
+    height: "3",
+    fill: "#FF3B30"
+  }), /*#__PURE__*/React.createElement("text", {
+    x: "12",
+    y: "19",
+    textAnchor: "middle",
+    fill: "#1a1a1a",
+    fontSize: "8",
+    fontWeight: "bold",
+    fontFamily: "sans-serif"
+  }, (event !== null && event !== void 0 && (_event$dateTime7 = event.dateTime) !== null && _event$dateTime7 !== void 0 && _event$dateTime7.toDate ? event.dateTime.toDate() : new Date((event === null || event === void 0 ? void 0 : event.dateTime) || Date.now())).getDate()))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '14px',
+      fontWeight: '600',
+      color: 'var(--text)',
+      marginBottom: '2px'
+    }
+  }, "Apple Calendar"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '12px',
+      color: 'var(--text3)'
+    }
+  }, "Downloads .ics file")), /*#__PURE__*/React.createElement(I, {
+    n: "ChevronRight",
+    s: 16,
+    c: "var(--text3)",
+    style: {
+      marginLeft: 'auto'
+    }
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      downloadICS();
+      setShowCalendarPicker(false);
+    },
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '14px',
+      padding: '14px 16px',
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius2)',
+      cursor: 'pointer',
+      textAlign: 'left',
+      width: '100%'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '32px',
+      height: '32px',
+      borderRadius: '8px',
+      background: 'rgba(96,165,250,0.12)',
+      border: '1px solid rgba(96,165,250,0.25)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "Calendar",
+    s: 16,
+    c: "#60a5fa"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '14px',
+      fontWeight: '600',
+      color: 'var(--text)',
+      marginBottom: '2px'
+    }
+  }, "Other Calendar"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '12px',
+      color: 'var(--text3)'
+    }
+  }, "Downloads .ics file")), /*#__PURE__*/React.createElement(I, {
+    n: "ChevronRight",
+    s: 16,
+    c: "var(--text3)",
+    style: {
+      marginLeft: 'auto'
+    }
+  }))))), showShareModal && /*#__PURE__*/React.createElement(ShareModal, {
+    link: getEventDeepLink(),
+    onClose: () => setShowShareModal(false)
   }), showCancelConfirm && /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'fixed',
@@ -12186,16 +12458,182 @@ function LiveGameScreen({
   }, "Save Changes"))));
 }
 
+// ==================== SHARE MODAL ====================
+function ShareModal({
+  link,
+  onClose
+}) {
+  const [copied, setCopied] = React.useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch (e) {
+      // fallback for older iOS
+      const el = document.createElement('textarea');
+      el.value = link;
+      el.style.position = 'fixed';
+      el.style.opacity = '0';
+      document.body.appendChild(el);
+      el.focus();
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    onClick: onClose,
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.65)',
+      zIndex: 600,
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.stopPropagation(),
+    style: {
+      background: 'var(--bg2)',
+      borderRadius: 'var(--radius) var(--radius) 0 0',
+      width: '100%',
+      maxWidth: '500px',
+      padding: '20px 20px 44px',
+      animation: 'slideUpFull 0.22s ease-out'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '36px',
+      height: '4px',
+      background: 'var(--border2)',
+      borderRadius: '2px',
+      margin: '0 auto 20px'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '15px',
+      fontWeight: '700',
+      color: 'var(--text)',
+      marginBottom: '16px',
+      textAlign: 'center'
+    }
+  }, "Share Event"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius2)',
+      padding: '11px 14px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      marginBottom: '12px'
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "Globe",
+    s: 14,
+    c: "var(--text3)"
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      fontSize: '12px',
+      color: 'var(--text2)',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+      fontFamily: 'monospace'
+    }
+  }, link)), /*#__PURE__*/React.createElement("button", {
+    onClick: copy,
+    style: {
+      width: '100%',
+      padding: '14px',
+      borderRadius: 'var(--radius2)',
+      background: copied ? 'var(--accent3)' : 'var(--accent)',
+      border: copied ? '1px solid var(--accent)' : 'none',
+      color: copied ? 'var(--accent)' : '#050a14',
+      fontWeight: '700',
+      fontSize: '14px',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '8px',
+      transition: 'all 0.2s'
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: copied ? 'Check' : 'Share',
+    s: 16,
+    c: copied ? 'var(--accent)' : '#050a14'
+  }), copied ? 'Copied to clipboard!' : 'Copy Link')));
+}
+
 // ==================== MAIN APP ====================
+
+// Hash routing helpers
+const parseHash = () => {
+  const hash = window.location.hash.replace(/^#\/?/, '') || '';
+  if (!hash || hash === '/') return {
+    screen: 'home',
+    eventId: null
+  };
+  const parts = hash.replace(/^\//, '').split('/');
+  const screen = parts[0] || 'home';
+  const eventId = screen === 'events' && parts[1] ? parts[1] : null;
+  const validScreens = ['home', 'events', 'create', 'courts', 'coaches', 'players', 'profile'];
+  return {
+    screen: validScreens.includes(screen) ? screen : 'home',
+    eventId
+  };
+};
+const pushRoute = (screen, eventId = null) => {
+  const path = eventId ? `/events/${eventId}` : screen === 'home' ? '/' : `/${screen}`;
+  window.location.hash = path;
+};
 function App() {
   const {
     currentUser,
     loading
   } = useAuth();
-  const [screen, setScreen] = useState('home');
-  const [eventId, setEventId] = useState(null);
+
+  // Initialise from URL hash so deep links work on load
+  const [screen, setScreenState] = useState(() => parseHash().screen);
+  const [eventId, setEventIdState] = useState(() => parseHash().eventId);
   const [liveGame, setLiveGame] = useState(null);
   const [instantPlayers, setInstantPlayers] = useState(null);
+
+  // Wrapped setters that also update the URL hash
+  const setScreen = s => {
+    setScreenState(s);
+    if (s !== screen || eventId) {
+      setEventIdState(null);
+      pushRoute(s, null);
+    }
+  };
+  const setEventId = id => {
+    setEventIdState(id);
+    pushRoute(id ? 'events' : screen, id);
+  };
+  const navigate = (s, id = null) => {
+    setScreenState(s);
+    setEventIdState(id);
+    pushRoute(s, id);
+  };
+
+  // Listen for browser back/forward
+  React.useEffect(() => {
+    const onHashChange = () => {
+      const {
+        screen: s,
+        eventId: id
+      } = parseHash();
+      setScreenState(s);
+      setEventIdState(id);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   // ── on login, check for a saved game session and route back in ──
   const [recoveredPlayers, setRecoveredPlayers] = useState(null);
@@ -12205,7 +12643,6 @@ function App() {
       const raw = localStorage.getItem(GAME_SESSION_KEY);
       if (!raw) return;
       const s = JSON.parse(raw);
-      // Only auto-recover sessions saved within the last 24h
       if (!s.gamePlayers || Date.now() - s.savedAt > 86400000) {
         localStorage.removeItem(GAME_SESSION_KEY);
         return;
@@ -12214,7 +12651,7 @@ function App() {
     } catch (e) {}
   }, [currentUser]);
 
-  // Scroll to top on every screen/route change — MUST be before any early returns
+  // Scroll to top on every route change — MUST be before early returns
   const screenKey = screen + (eventId || '');
   React.useEffect(() => {
     window.scrollTo({
@@ -12254,10 +12691,8 @@ function App() {
     }
   }, "Loading...")));
   if (!currentUser) return /*#__PURE__*/React.createElement(LoginScreen, {
-    onLogin: () => setScreen('home')
+    onLogin: () => navigate('home')
   });
-
-  // Auto-recover saved session — route straight into LiveGameScreen
   if (recoveredPlayers) return /*#__PURE__*/React.createElement(LiveGameScreen, {
     players: recoveredPlayers,
     format: "kings",
@@ -12266,6 +12701,7 @@ function App() {
         localStorage.removeItem(GAME_SESSION_KEY);
       } catch (e) {}
       setRecoveredPlayers(null);
+      navigate('home');
     }
   });
   if (liveGame) return /*#__PURE__*/React.createElement(LiveGameScreen, {
@@ -12275,6 +12711,7 @@ function App() {
         localStorage.removeItem(GAME_SESSION_KEY);
       } catch (e) {}
       setLiveGame(null);
+      navigate('events');
     }
   });
   if (instantPlayers) return /*#__PURE__*/React.createElement(LiveGameScreen, {
@@ -12285,12 +12722,11 @@ function App() {
         localStorage.removeItem(GAME_SESSION_KEY);
       } catch (e) {}
       setInstantPlayers(null);
+      navigate('home');
     }
   });
   const handleInstantGame = players => {
-    if (players) {
-      setInstantPlayers(players);
-    }
+    if (players) setInstantPlayers(players);
   };
   const navItems = [{
     key: 'home',
@@ -12309,32 +12745,26 @@ function App() {
     label: 'Profile',
     icon: 'User'
   }];
-  const showNav = !['create'].includes(screen) && !eventId;
+  const showNav = screen !== 'create' && !eventId;
   return /*#__PURE__*/React.createElement(React.Fragment, null, screen === 'home' && !eventId && /*#__PURE__*/React.createElement(HomeScreen, {
     key: "home",
-    onCreateEvent: () => setScreen('create'),
-    onViewEvent: id => {
-      setEventId(id);
-      setScreen('events');
-    },
+    onCreateEvent: () => navigate('create'),
+    onViewEvent: id => navigate('events', id),
     onInstantGame: handleInstantGame,
     setScreen: setScreen
   }), screen === 'events' && !eventId && /*#__PURE__*/React.createElement(EventsScreen, {
     key: "events",
-    onViewEvent: id => setEventId(id),
-    onCreateEvent: () => setScreen('create')
+    onViewEvent: id => navigate('events', id),
+    onCreateEvent: () => navigate('create')
   }), screen === 'events' && eventId && /*#__PURE__*/React.createElement(EventDetailScreen, {
     key: 'event-' + eventId,
     eventId: eventId,
-    onBack: () => setEventId(null),
+    onBack: () => navigate('events'),
     onStartGame: e => setLiveGame(e)
   }), screen === 'create' && /*#__PURE__*/React.createElement(CreateEventScreen, {
     key: "create",
-    onBack: () => setScreen('home'),
-    onCreated: id => {
-      setEventId(id);
-      setScreen('events');
-    }
+    onBack: () => navigate('home'),
+    onCreated: id => navigate('events', id)
   }), screen === 'courts' && /*#__PURE__*/React.createElement(CourtsScreen, {
     key: "courts",
     setScreen: setScreen
@@ -12344,7 +12774,7 @@ function App() {
     key: "players"
   }), screen === 'profile' && /*#__PURE__*/React.createElement(ProfileScreen, {
     key: "profile",
-    onLogout: () => setScreen('home'),
+    onLogout: () => navigate('home'),
     setScreen: setScreen
   }), showNav && /*#__PURE__*/React.createElement("nav", {
     style: {
@@ -12361,13 +12791,10 @@ function App() {
       paddingTop: '8px'
     }
   }, navItems.map(item => {
-    const active = screen === item.key;
+    const active = screen === item.key && !eventId;
     return /*#__PURE__*/React.createElement("button", {
       key: item.key,
-      onClick: () => {
-        setScreen(item.key);
-        setEventId(null);
-      },
+      onClick: () => navigate(item.key),
       style: {
         display: 'flex',
         flexDirection: 'column',
