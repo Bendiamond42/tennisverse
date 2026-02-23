@@ -208,6 +208,7 @@
         Share: <><circle cx="18" cy="5" r="3" fill="none" stroke={c} strokeWidth="1.75"/><circle cx="6" cy="12" r="3" fill="none" stroke={c} strokeWidth="1.75"/><circle cx="18" cy="19" r="3" fill="none" stroke={c} strokeWidth="1.75"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" stroke={c} strokeWidth="1.75" strokeLinecap="round"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
         Pause: <><rect x="6" y="4" width="4" height="16" rx="1" fill={c}/><rect x="14" y="4" width="4" height="16" rx="1" fill={c}/></>,
         UserPlus: <><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round"/><circle cx="8.5" cy="7" r="4" fill="none" stroke={c} strokeWidth="1.75"/><line x1="20" y1="8" x2="20" y2="14" stroke={c} strokeWidth="1.75" strokeLinecap="round"/><line x1="17" y1="11" x2="23" y2="11" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
+        CornerDownRight: <><polyline points="15 10 20 15 15 20" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/><path d="M4 4v7a4 4 0 004 4h12" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
         Racket: <><ellipse cx="11" cy="9" rx="5" ry="6.5" fill="none" stroke={c} strokeWidth="1.75"/><line x1="11" y1="2.5" x2="11" y2="15.5" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><line x1="5.5" y1="9" x2="16.5" y2="9" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><line x1="6.5" y1="5.5" x2="15.5" y2="12.5" stroke={c} strokeWidth="1" strokeLinecap="round" opacity="0.5"/><line x1="15.5" y1="5.5" x2="6.5" y2="12.5" stroke={c} strokeWidth="1" strokeLinecap="round" opacity="0.5"/><line x1="11" y1="15.5" x2="9" y2="21" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
         Mail: <><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" fill="none" stroke={c} strokeWidth="1.75"/><polyline points="22,6 12,13 2,6" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
         Trophy: <><path d="M6 9H3V4h3M18 9h3V4h-3M6 4h12v7a6 6 0 01-12 0V4z" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/><line x1="12" y1="20" x2="12" y2="16" stroke={c} strokeWidth="1.75" strokeLinecap="round"/><line x1="8" y1="20" x2="16" y2="20" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
@@ -1589,11 +1590,16 @@
       const { currentUser, userProfile } = useAuth();
       const [event, setEvent] = useState(null);
       const [loading, setLoading] = useState(true);
-      const [tab, setTab] = useState('info');
-      const [chatMessages, setChatMessages] = useState([]);
-      const [chatText, setChatText] = useState('');
-      const [sendingChat, setSendingChat] = useState(false);
-      const chatBottomRef = useRef(null);
+      const [infoCollapsed, setInfoCollapsed] = useState(false);
+      const [comments, setComments] = useState([]);
+      const [commentText, setCommentText] = useState('');
+      const [sendingComment, setSendingComment] = useState(false);
+      const [replyingTo, setReplyingTo] = useState(null); // {id, authorName}
+      const [mentionQuery, setMentionQuery] = useState('');
+      const [showMentions, setShowMentions] = useState(false);
+      const [cursorPos, setCursorPos] = useState(0);
+      const inputRef = useRef(null);
+      const discussionRef = useRef(null);
 
       useEffect(() => {
         return db.collection('events').doc(eventId).onSnapshot(s => {
@@ -1604,72 +1610,111 @@
 
       useEffect(() => {
         if (!eventId) return;
-        return db.collection('events').doc(eventId).collection('messages')
-          .orderBy('createdAt', 'asc').limit(150)
-          .onSnapshot(s => setChatMessages(s.docs.map(d => ({id:d.id,...d.data()}))), () => {});
+        return db.collection('events').doc(eventId).collection('comments')
+          .limit(200)
+          .onSnapshot(s => {
+            const docs = s.docs.map(d => ({id:d.id,...d.data()}))
+              .sort((a,b) => {
+                const at = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+                const bt = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+                return at - bt;
+              });
+            setComments(docs);
+          }, () => {});
       }, [eventId]);
-
-      useEffect(() => {
-        if (tab === 'chat') setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior:'smooth' }), 100);
-      }, [chatMessages.length, tab]);
-
-      const sendChat = async () => {
-        const text = chatText.trim();
-        if (!text || !currentUser) return;
-        setSendingChat(true);
-        setChatText('');
-        try {
-          await db.collection('events').doc(eventId).collection('messages').add({
-            text,
-            authorId: currentUser.uid,
-            authorName: `${userProfile?.firstName||''} ${userProfile?.lastName||''}`.trim() || 'Player',
-            authorPhoto: userProfile?.photoURL || '',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-          });
-        } catch(e) {} finally { setSendingChat(false); }
-      };
 
       const handleRSVP = async (action) => {
         if (!currentUser || !event) return;
         const rsvps = event.rsvps || [];
         const waitlist = event.waitlist || [];
-        const myInfo = {
-          oderId: currentUser.uid,
-          userName: `${userProfile?.firstName||''} ${userProfile?.lastName||''}`.trim(),
-          firstName: userProfile?.firstName || '',
-          photoURL: userProfile?.photoURL || ''
-        };
+        const myInfo = { oderId:currentUser.uid, userName:`${userProfile?.firstName||''} ${userProfile?.lastName||''}`.trim(), firstName:userProfile?.firstName||'', photoURL:userProfile?.photoURL||'' };
         if (action === 'join') {
           const exists = rsvps.findIndex(r => r.oderId === currentUser.uid);
-          let newRsvps = exists >= 0
-            ? rsvps.map((r,i) => i===exists ? {...r, status:'going'} : r)
-            : [...rsvps, {...myInfo, status:'going', isHost:false}];
-          const newWait = waitlist.filter(r => r.oderId !== currentUser.uid);
-          await db.collection('events').doc(eventId).update({ rsvps: newRsvps, waitlist: newWait });
+          const newRsvps = exists >= 0 ? rsvps.map((r,i) => i===exists?{...r,status:'going'}:r) : [...rsvps, {...myInfo,status:'going',isHost:false}];
+          await db.collection('events').doc(eventId).update({ rsvps: newRsvps, waitlist: waitlist.filter(r => r.oderId !== currentUser.uid) });
         } else if (action === 'waitlist') {
           if (waitlist.some(r => r.oderId === currentUser.uid)) return;
           await db.collection('events').doc(eventId).update({ waitlist: [...waitlist, {...myInfo, requestedAt: new Date().toISOString()}] });
         } else if (action === 'leave') {
-          await db.collection('events').doc(eventId).update({
-            rsvps: rsvps.filter(r => r.oderId !== currentUser.uid),
-            waitlist: waitlist.filter(r => r.oderId !== currentUser.uid)
-          });
+          await db.collection('events').doc(eventId).update({ rsvps: rsvps.filter(r => r.oderId !== currentUser.uid), waitlist: waitlist.filter(r => r.oderId !== currentUser.uid) });
         }
       };
 
       const approveWaitlist = async (uid) => {
         const person = (event.waitlist||[]).find(r => r.oderId === uid);
         if (!person) return;
-        await db.collection('events').doc(eventId).update({
-          waitlist: (event.waitlist||[]).filter(r => r.oderId !== uid),
-          rsvps: [...(event.rsvps||[]), {...person, status:'going', isHost:false}]
-        });
+        await db.collection('events').doc(eventId).update({ waitlist: (event.waitlist||[]).filter(r => r.oderId !== uid), rsvps: [...(event.rsvps||[]), {...person, status:'going', isHost:false}] });
+      };
+      const denyWaitlist = async (uid) => {
+        await db.collection('events').doc(eventId).update({ waitlist: (event.waitlist||[]).filter(r => r.oderId !== uid) });
       };
 
-      const denyWaitlist = async (uid) => {
-        await db.collection('events').doc(eventId).update({
-          waitlist: (event.waitlist||[]).filter(r => r.oderId !== uid)
-        });
+      // Handle @mention detection
+      const handleCommentChange = (e) => {
+        const val = e.target.value;
+        setCommentText(val);
+        const pos = e.target.selectionStart;
+        setCursorPos(pos);
+        // Find @mention being typed
+        const before = val.slice(0, pos);
+        const match = before.match(/@(\w*)$/);
+        if (match) {
+          setMentionQuery(match[1]);
+          setShowMentions(true);
+        } else {
+          setShowMentions(false);
+          setMentionQuery('');
+        }
+      };
+
+      const insertMention = (player) => {
+        const before = commentText.slice(0, cursorPos);
+        const after = commentText.slice(cursorPos);
+        const atStart = before.lastIndexOf('@');
+        const newText = before.slice(0, atStart) + `@${player.firstName}${player.lastName?' '+player.lastName:''}` + ' ' + after;
+        setCommentText(newText);
+        setShowMentions(false);
+        setMentionQuery('');
+        inputRef.current?.focus();
+      };
+
+      const sendComment = async () => {
+        const text = commentText.trim();
+        if (!text || !currentUser) return;
+        setSendingComment(true);
+        const saved = text;
+        setCommentText('');
+        setReplyingTo(null);
+        try {
+          await db.collection('events').doc(eventId).collection('comments').add({
+            text: saved,
+            authorId: currentUser.uid,
+            authorName: `${userProfile?.firstName||''} ${userProfile?.lastName||''}`.trim() || 'Player',
+            authorPhoto: userProfile?.photoURL || '',
+            replyTo: replyingTo ? { id: replyingTo.id, authorName: replyingTo.authorName, preview: replyingTo.text?.slice(0,60) } : null,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            likes: [],
+          });
+          setTimeout(() => discussionRef.current?.scrollIntoView({ behavior:'smooth', block:'end' }), 100);
+        } catch(e) { setCommentText(saved); } finally { setSendingComment(false); }
+      };
+
+      const toggleLike = async (comment) => {
+        if (!currentUser) return;
+        const likes = comment.likes || [];
+        const newLikes = likes.includes(currentUser.uid) ? likes.filter(id => id !== currentUser.uid) : [...likes, currentUser.uid];
+        await db.collection('events').doc(eventId).collection('comments').doc(comment.id).update({ likes: newLikes });
+      };
+
+      const fmtTime = (ts) => {
+        if (!ts) return '';
+        const d2 = ts.toDate ? ts.toDate() : new Date(ts);
+        const now = new Date();
+        const diff = Math.floor((now - d2) / 1000);
+        if (diff < 60) return 'just now';
+        if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+        if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+        return d2.toLocaleDateString('en-US', {month:'short', day:'numeric'});
       };
 
       if (loading) return <div style={{ minHeight:'100vh', background:'var(--bg)', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text3)' }}>Loading...</div>;
@@ -1683,24 +1728,27 @@
       const isFull = !!(event.maxPlayers && going.length >= event.maxPlayers && !isGoing);
       const d = event.dateTime?.toDate ? event.dateTime.toDate() : new Date(event.dateTime||Date.now());
 
-      const fmtMsgTime = (ts) => {
-        if (!ts) return '';
-        const d2 = ts.toDate ? ts.toDate() : new Date(ts);
-        return d2.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+      // Mention suggestions: going players minus self
+      const mentionSuggestions = going.filter(p =>
+        p.oderId !== currentUser?.uid &&
+        `${p.firstName} ${p.lastName||''}`.toLowerCase().includes(mentionQuery.toLowerCase())
+      ).slice(0, 5);
+
+      // Render comment text with highlighted @mentions
+      const renderText = (text) => {
+        if (!text) return null;
+        const parts = text.split(/(@[\w]+(?:\s+[\w]+)?)/g);
+        return parts.map((part, i) =>
+          part.startsWith('@')
+            ? <span key={i} style={{ color:'var(--accent)', fontWeight:'600' }}>{part}</span>
+            : part
+        );
       };
 
-      const waitlistTabLabel = isHost && waitlist.length > 0 ? `Waitlist (${waitlist.length})` : null;
-      const tabs = [
-        {key:'info', label:'Info'},
-        {key:'players', label:`Players (${going.length})`},
-        {key:'chat', label:`Chat${chatMessages.length > 0 ? ` ·${chatMessages.length}` : ''}`},
-        ...(waitlistTabLabel ? [{key:'waitlist', label:waitlistTabLabel}] : [])
-      ];
-
       return (
-        <div style={{ minHeight:'100vh', background:'var(--bg)', display:'flex', flexDirection:'column' }}>
-          {/* Sticky header area */}
-          <div style={{ maxWidth:'500px', margin:'0 auto', width:'100%', padding:'24px 20px 0', flexShrink:0 }}>
+        <div style={{ minHeight:'100vh', background:'var(--bg)', paddingBottom:'100px' }}>
+          <div style={{ maxWidth:'500px', margin:'0 auto', padding:'24px 20px 0' }}>
+            {/* Header */}
             <PageHeader onBack={onBack} title="" right={
               <div style={{ display:'flex', gap:'8px' }}>
                 {isHost && <Btn onClick={() => onStartGame(event)} size="sm" icon="Zap">Start</Btn>}
@@ -1715,13 +1763,12 @@
                 {isFull && !isGoing && <Badge color="red">Full</Badge>}
                 {waitlist.length > 0 && isHost && <Badge color="purple">{waitlist.length} waiting</Badge>}
               </div>
-              <h2 style={{ fontSize:'24px', fontWeight:'800', letterSpacing:'-0.03em', margin:'0 0 12px' }}>{event.title}</h2>
+              <h2 style={{ fontSize:'26px', fontWeight:'900', letterSpacing:'-0.03em', margin:'0 0 10px' }}>{event.title}</h2>
               <div style={{ display:'flex', flexWrap:'wrap', gap:'10px', justifyContent:'center', fontSize:'13px', color:'var(--text2)', marginBottom:'12px' }}>
                 <span style={{ display:'flex', alignItems:'center', gap:'5px' }}><I n="Calendar" s={13} c="var(--text3)" />{d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</span>
                 <span style={{ display:'flex', alignItems:'center', gap:'5px' }}><I n="Clock" s={13} c="var(--text3)" />{d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span>
                 {event.location && <span style={{ display:'flex', alignItems:'center', gap:'5px' }}><I n="MapPin" s={13} c="var(--text3)" />{event.location.split(',')[0]}</span>}
               </div>
-              {/* Host & Coach pills */}
               <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'8px' }}>
                 {event.hostName && (
                   <div style={{ display:'inline-flex', alignItems:'center', gap:'7px', padding:'6px 12px', background:'var(--surface)', borderRadius:'20px', border:'1px solid var(--border)', fontSize:'12px', color:'var(--text2)' }}>
@@ -1738,8 +1785,8 @@
               </div>
             </div>
 
-            {/* RSVP Area */}
-            <div style={{ marginBottom:'16px' }}>
+            {/* RSVP */}
+            <div style={{ marginBottom:'20px' }}>
               {!isHost && !isGoing && !isOnWaitlist && (
                 isFull
                   ? (event.allowWaitlist !== false
@@ -1748,165 +1795,200 @@
                   : <button onClick={() => handleRSVP('join')} style={{ width:'100%', padding:'16px', borderRadius:'var(--radius)', background:'var(--accent)', color:'#050a14', fontWeight:'700', fontSize:'16px', cursor:'pointer', border:'none' }}>✓ Join Game</button>
               )}
               {!isHost && isGoing && (
-                <button onClick={() => handleRSVP('join')} style={{ width:'100%', padding:'16px', borderRadius:'var(--radius)', background:'var(--accent)', color:'#050a14', fontWeight:'700', fontSize:'16px', cursor:'pointer', border:'none', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' }}>
+                <button style={{ width:'100%', padding:'16px', borderRadius:'var(--radius)', background:'var(--accent)', color:'#050a14', fontWeight:'700', fontSize:'16px', cursor:'default', border:'none', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' }}>
                   <I n="Check" s={18} c="#050a14" /> You're Going!
                 </button>
               )}
               {!isHost && isOnWaitlist && (
-                <div style={{ width:'100%', padding:'14px', borderRadius:'var(--radius)', background:'rgba(167,139,250,0.1)', border:'1px solid rgba(167,139,250,0.3)', color:'#c4b5fd', fontWeight:'600', fontSize:'14px', textAlign:'center' }}>
-                  ⏳ On Waitlist — pending host approval
-                </div>
+                <div style={{ width:'100%', padding:'14px', borderRadius:'var(--radius)', background:'rgba(167,139,250,0.1)', border:'1px solid rgba(167,139,250,0.3)', color:'#c4b5fd', fontWeight:'600', fontSize:'14px', textAlign:'center' }}>⏳ On Waitlist — pending host approval</div>
               )}
               {(isGoing || isOnWaitlist) && !isHost && (
                 <button onClick={() => handleRSVP('leave')} style={{ width:'100%', padding:'10px', background:'none', border:'none', color:'var(--text3)', fontSize:'13px', cursor:'pointer', marginTop:'6px' }}>Can't make it anymore</button>
               )}
             </div>
 
-            <Tabs tabs={tabs} active={tab} onChange={setTab} />
-          </div>
-
-          {/* ---- INFO TAB ---- */}
-          {tab === 'info' && (
-            <div style={{ maxWidth:'500px', margin:'0 auto', width:'100%', padding:'0 20px 80px', flex:1 }}>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginBottom:'16px' }}>
-                {[
-                  {label:'Players', value:`${going.length}${event.maxPlayers?'/'+event.maxPlayers:''}`},
-                  {label:'Messages', value:chatMessages.length},
-                  {label:'Waitlist', value:waitlist.length},
-                ].map(s => (
-                  <div key={s.label} style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius2)', padding:'14px', textAlign:'center' }}>
-                    <div style={{ fontWeight:'800', fontSize:'20px' }}>{s.value}</div>
-                    <div style={{ fontSize:'11px', color:'var(--text2)', marginTop:'2px' }}>{s.label}</div>
-                  </div>
-                ))}
-              </div>
-              {event.notes && (
-                <Card>
-                  <div style={{ fontSize:'12px', fontWeight:'600', color:'var(--text2)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'8px' }}>Notes</div>
-                  <p style={{ margin:0, fontSize:'14px', lineHeight:'1.6' }}>{event.notes}</p>
-                </Card>
-              )}
-            </div>
-          )}
-
-          {/* ---- PLAYERS TAB ---- */}
-          {tab === 'players' && (
-            <div style={{ maxWidth:'500px', margin:'0 auto', width:'100%', padding:'0 20px 80px', flex:1 }}>
-              <Card>
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px' }}>
-                  <div style={{ fontWeight:'700', fontSize:'15px' }}>Going</div>
-                  <Badge color={isFull ? 'red' : 'green'}>{going.length}{event.maxPlayers ? `/${event.maxPlayers}` : ''}</Badge>
+            {/* ── CONFIRMED PLAYERS ── */}
+            {going.length > 0 && (
+              <div style={{ marginBottom:'20px' }}>
+                <div style={{ fontSize:'12px', fontWeight:'700', color:'var(--text3)', letterSpacing:'0.07em', textTransform:'uppercase', marginBottom:'12px' }}>
+                  Going · {going.length}{event.maxPlayers ? `/${event.maxPlayers}` : ''}
                 </div>
-                {going.length === 0
-                  ? <div style={{ textAlign:'center', padding:'20px', color:'var(--text3)', fontSize:'14px' }}>Be the first to join!</div>
-                  : going.map((p, i) => {
+                <div style={{ display:'flex', gap:'12px', overflowX:'auto', paddingBottom:'4px' }}>
+                  {going.map((p, i) => {
                     const isMe = p.oderId === currentUser?.uid;
                     return (
-                      <div key={i} style={{ display:'flex', alignItems:'center', gap:'12px', padding:'10px 0', borderBottom: i < going.length-1 ? '1px solid var(--border)' : 'none' }}>
-                        <Avatar src={p.photoURL} name={p.firstName||p.userName} size={46} />
-                        <div style={{ flex:1 }}>
-                          <div style={{ fontWeight:'600', fontSize:'14px' }}>
-                            {p.firstName||p.userName?.split(' ')[0]}
-                            {isMe && <span style={{ color:'var(--text3)', fontWeight:'400', fontSize:'12px' }}> · you</span>}
-                          </div>
-                          {p.isHost && <span style={{ fontSize:'11px', color:'var(--accent)', fontWeight:'600' }}>Host</span>}
+                      <div key={i} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'5px', flexShrink:0 }}>
+                        <div style={{ position:'relative' }}>
+                          <Avatar src={p.photoURL} name={p.firstName||p.userName} size={44} style={{ border:`2px solid ${isMe ? 'var(--accent)' : 'var(--border)'}` }} />
+                          {p.isHost && (
+                            <div style={{ position:'absolute', bottom:'-2px', right:'-2px', width:'16px', height:'16px', borderRadius:'50%', background:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', border:'2px solid var(--bg)' }}>
+                              <I n="Star" s={8} c="#050a14" />
+                            </div>
+                          )}
                         </div>
-                        {isMe && <I n="Check" s={16} c="var(--accent)" />}
+                        <span style={{ fontSize:'10px', color: isMe ? 'var(--accent)' : 'var(--text2)', fontWeight:'600', maxWidth:'44px', textAlign:'center', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          {p.firstName || p.userName?.split(' ')[0]}
+                        </span>
                       </div>
                     );
-                  })
-                }
-              </Card>
-            </div>
-          )}
-
-          {/* ---- CHAT TAB ---- */}
-          {tab === 'chat' && (
-            <div style={{ maxWidth:'500px', margin:'0 auto', width:'100%', display:'flex', flexDirection:'column', flex:1, minHeight:0, height:'calc(100vh - 360px)' }}>
-              <div style={{ flex:1, overflowY:'auto', padding:'16px 20px', display:'flex', flexDirection:'column', gap:'10px' }}>
-                {chatMessages.length === 0 && (
-                  <div style={{ textAlign:'center', padding:'40px 20px', color:'var(--text3)', display:'flex', flexDirection:'column', alignItems:'center', gap:'10px' }}>
-                    <I n="MessageCircle" s={40} c="var(--border2)" />
-                    <div style={{ fontSize:'15px', fontWeight:'600' }}>No messages yet</div>
-                    <div style={{ fontSize:'13px' }}>Start the conversation!</div>
-                  </div>
-                )}
-                {chatMessages.map((msg, i) => {
-                  const isMe = msg.authorId === currentUser?.uid;
-                  const prev = chatMessages[i-1];
-                  const samePrev = prev && prev.authorId === msg.authorId;
-                  return (
-                    <div key={msg.id} style={{ display:'flex', flexDirection:isMe?'row-reverse':'row', gap:'8px', alignItems:'flex-end' }}>
-                      {!isMe && !samePrev && <Avatar src={msg.authorPhoto} name={msg.authorName} size={28} style={{ flexShrink:0 }} />}
-                      {!isMe && samePrev && <div style={{ width:'28px', flexShrink:0 }} />}
-                      <div style={{ maxWidth:'74%' }}>
-                        {!isMe && !samePrev && <div style={{ fontSize:'11px', color:'var(--text3)', marginBottom:'3px', marginLeft:'4px', fontWeight:'600' }}>{msg.authorName?.split(' ')[0]}</div>}
-                        <div style={{ padding:'10px 14px', borderRadius:isMe?'16px 16px 4px 16px':'16px 16px 16px 4px', background:isMe?'var(--accent)':'var(--surface2)', color:isMe?'#050a14':'var(--text)', fontSize:'14px', lineHeight:'1.45', wordBreak:'break-word' }}>
-                          {msg.text}
-                        </div>
-                        <div style={{ fontSize:'10px', color:'var(--text3)', marginTop:'3px', textAlign:isMe?'right':'left', paddingLeft:isMe?0:'4px', paddingRight:isMe?'4px':0 }}>
-                          {fmtMsgTime(msg.createdAt)}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                <div ref={chatBottomRef} />
-              </div>
-              {/* Input bar */}
-              <div style={{ padding:'10px 16px', background:'var(--bg2)', borderTop:'1px solid var(--border)', display:'flex', gap:'10px', alignItems:'center', paddingBottom:'max(12px, env(safe-area-inset-bottom))' }}>
-                <div style={{ flex:1, background:'var(--surface)', borderRadius:'24px', border:'1px solid var(--border2)', padding:'10px 16px', display:'flex', alignItems:'center' }}>
-                  <input
-                    value={chatText}
-                    onChange={e => setChatText(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }}}
-                    placeholder="Message..."
-                    style={{ flex:1, background:'transparent', border:'none', color:'var(--text)', fontSize:'14px', outline:'none' }}
-                  />
+                  })}
                 </div>
-                <button onClick={sendChat} disabled={!chatText.trim() || sendingChat} style={{ width:'42px', height:'42px', borderRadius:'50%', background:chatText.trim()?'var(--accent)':'var(--surface2)', border:'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:chatText.trim()?'pointer':'default', transition:'background 0.15s', flexShrink:0 }}>
-                  <I n="Send" s={16} c={chatText.trim()?'#050a14':'var(--text3)'} />
-                </button>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* ---- WAITLIST TAB (host only) ---- */}
-          {tab === 'waitlist' && isHost && (
-            <div style={{ maxWidth:'500px', margin:'0 auto', width:'100%', padding:'0 20px 80px', flex:1 }}>
-              {waitlist.length === 0 ? (
-                <Empty icon="Bell" title="No one waiting" sub="Players who request to join when full will appear here" />
-              ) : (
-                <Card>
-                  <div style={{ fontWeight:'700', fontSize:'15px', marginBottom:'16px' }}>
-                    {waitlist.length} {waitlist.length === 1 ? 'person' : 'people'} waiting for approval
+            {/* ── COLLAPSABLE INFO ── */}
+            <div style={{ marginBottom:'20px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius2)', overflow:'hidden' }}>
+              <div onClick={() => setInfoCollapsed(c => !c)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', cursor:'pointer', userSelect:'none' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                  <I n="Info" s={15} c="var(--text3)" />
+                  <span style={{ fontSize:'13px', fontWeight:'700', color:'var(--text2)', textTransform:'uppercase', letterSpacing:'0.06em' }}>Event Info</span>
+                </div>
+                <I n={infoCollapsed ? 'ChevronRight' : 'ChevronDown'} s={16} c="var(--text3)" />
+              </div>
+              {!infoCollapsed && (
+                <div style={{ padding:'0 16px 16px', borderTop:'1px solid var(--border)' }}>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginTop:'14px', marginBottom: event.notes ? '14px' : 0 }}>
+                    {[
+                      {label:'Players', value:`${going.length}${event.maxPlayers?'/'+event.maxPlayers:''}`},
+                      {label:'Comments', value:comments.length},
+                      {label:'Waitlist', value:waitlist.length},
+                    ].map(s => (
+                      <div key={s.label} style={{ background:'var(--bg)', border:'1px solid var(--border)', borderRadius:'var(--radius3)', padding:'12px', textAlign:'center' }}>
+                        <div style={{ fontWeight:'800', fontSize:'18px' }}>{s.value}</div>
+                        <div style={{ fontSize:'11px', color:'var(--text2)', marginTop:'2px' }}>{s.label}</div>
+                      </div>
+                    ))}
                   </div>
-                  {waitlist.map((p, i) => (
-                    <div key={p.oderId} style={{ display:'flex', alignItems:'center', gap:'12px', padding:'12px 0', borderBottom: i < waitlist.length-1 ? '1px solid var(--border)' : 'none' }}>
-                      <Avatar src={p.photoURL} name={p.firstName||p.userName} size={46} />
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontWeight:'600', fontSize:'14px' }}>{p.firstName||p.userName}</div>
-                        {p.requestedAt && <div style={{ fontSize:'11px', color:'var(--text3)', marginTop:'2px' }}>
-                          Requested {new Date(p.requestedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'})}
-                        </div>}
-                      </div>
-                      <div style={{ display:'flex', gap:'6px', flexShrink:0 }}>
-                        <button onClick={() => approveWaitlist(p.oderId)} style={{ padding:'8px 14px', borderRadius:'var(--radius3)', background:'var(--accent3)', border:'1px solid var(--accent)', color:'var(--accent)', fontSize:'13px', fontWeight:'700', cursor:'pointer' }}>
-                          ✓ Approve
-                        </button>
-                        <button onClick={() => denyWaitlist(p.oderId)} style={{ padding:'8px 12px', borderRadius:'var(--radius3)', background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.3)', color:'var(--red)', fontSize:'13px', cursor:'pointer' }}>
-                          ✕
-                        </button>
-                      </div>
+                  {event.notes && (
+                    <div style={{ background:'var(--bg)', borderRadius:'var(--radius3)', border:'1px solid var(--border)', padding:'12px' }}>
+                      <div style={{ fontSize:'11px', fontWeight:'700', color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'6px' }}>Notes</div>
+                      <p style={{ margin:0, fontSize:'14px', lineHeight:'1.6', color:'var(--text2)' }}>{event.notes}</p>
                     </div>
-                  ))}
-                </Card>
+                  )}
+                  {isHost && waitlist.length > 0 && (
+                    <div style={{ marginTop:'14px' }}>
+                      <div style={{ fontSize:'11px', fontWeight:'700', color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'8px' }}>Waitlist</div>
+                      {waitlist.map((p, i) => (
+                        <div key={p.oderId} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'8px 0', borderBottom: i < waitlist.length-1 ? '1px solid var(--border)' : 'none' }}>
+                          <Avatar src={p.photoURL} name={p.firstName||p.userName} size={36} />
+                          <div style={{ flex:1, fontSize:'13px', fontWeight:'600' }}>{p.firstName||p.userName}</div>
+                          <button onClick={() => approveWaitlist(p.oderId)} style={{ padding:'6px 10px', borderRadius:'var(--radius3)', background:'var(--accent3)', border:'1px solid var(--accent)', color:'var(--accent)', fontSize:'12px', fontWeight:'700', cursor:'pointer' }}>✓</button>
+                          <button onClick={() => denyWaitlist(p.oderId)} style={{ padding:'6px 10px', borderRadius:'var(--radius3)', background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.3)', color:'var(--red)', fontSize:'12px', cursor:'pointer' }}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          )}
+
+            {/* ── DISCUSSION ── */}
+            <div ref={discussionRef} style={{ marginBottom:'20px' }}>
+              <div style={{ fontSize:'12px', fontWeight:'700', color:'var(--text3)', letterSpacing:'0.07em', textTransform:'uppercase', marginBottom:'16px' }}>
+                Discussion{comments.length > 0 ? ` · ${comments.length}` : ''}
+              </div>
+
+              {/* Post box */}
+              <div style={{ background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:'var(--radius2)', marginBottom:'20px', overflow:'visible', position:'relative' }}>
+                {replyingTo && (
+                  <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'10px 14px', background:'rgba(74,222,128,0.05)', borderBottom:'1px solid var(--border)' }}>
+                    <I n="CornerDownRight" s={13} c="var(--accent)" />
+                    <span style={{ fontSize:'12px', color:'var(--text3)', flex:1 }}>
+                      Replying to <strong style={{ color:'var(--text)' }}>{replyingTo.authorName?.split(' ')[0]}</strong>
+                      {replyingTo.text && <span style={{ color:'var(--text3)' }}> · "{replyingTo.text.slice(0,40)}{replyingTo.text.length>40?'…':''}"</span>}
+                    </span>
+                    <button onClick={() => setReplyingTo(null)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text3)', padding:'2px' }}><I n="X" s={13} c="var(--text3)" /></button>
+                  </div>
+                )}
+                <div style={{ display:'flex', alignItems:'flex-start', gap:'10px', padding:'12px 14px' }}>
+                  <Avatar src={userProfile?.photoURL} name={`${userProfile?.firstName} ${userProfile?.lastName}`} size={32} style={{ flexShrink:0, marginTop:'2px' }} />
+                  <textarea
+                    ref={inputRef}
+                    value={commentText}
+                    onChange={handleCommentChange}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !showMentions) { e.preventDefault(); sendComment(); } if (e.key === 'Escape') { setReplyingTo(null); setShowMentions(false); } }}
+                    placeholder={replyingTo ? `Reply to ${replyingTo.authorName?.split(' ')[0]}… (use @ to mention)` : "Drop a comment or question… (use @ to mention)"}
+                    rows={2}
+                    style={{ flex:1, background:'transparent', border:'none', color:'var(--text)', fontSize:'14px', outline:'none', resize:'none', lineHeight:'1.5', fontFamily:'inherit' }}
+                  />
+                  <button
+                    onClick={sendComment}
+                    disabled={!commentText.trim() || sendingComment}
+                    style={{ width:'36px', height:'36px', borderRadius:'50%', background: commentText.trim() ? 'var(--accent)' : 'var(--surface2)', border:'none', display:'flex', alignItems:'center', justifyContent:'center', cursor: commentText.trim() ? 'pointer' : 'default', flexShrink:0, transition:'background 0.15s' }}>
+                    <I n="Send" s={15} c={commentText.trim() ? '#050a14' : 'var(--text3)'} />
+                  </button>
+                </div>
+
+                {/* @mention dropdown */}
+                {showMentions && mentionSuggestions.length > 0 && (
+                  <div style={{ position:'absolute', bottom:'100%', left:0, right:0, background:'var(--bg2)', border:'1px solid var(--border2)', borderRadius:'var(--radius2)', marginBottom:'4px', overflow:'hidden', zIndex:100, boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
+                    {mentionSuggestions.map(p => (
+                      <div key={p.oderId} onMouseDown={e => { e.preventDefault(); insertMention(p); }} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 14px', cursor:'pointer', borderBottom:'1px solid var(--border)' }}>
+                        <Avatar src={p.photoURL} name={`${p.firstName} ${p.lastName||''}`} size={28} />
+                        <span style={{ fontSize:'14px', fontWeight:'600' }}>{p.firstName} {p.lastName||''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Comments feed */}
+              {comments.length === 0 ? (
+                <div style={{ textAlign:'center', padding:'32px 20px', color:'var(--text3)', display:'flex', flexDirection:'column', alignItems:'center', gap:'8px' }}>
+                  <div style={{ fontSize:'28px' }}>💬</div>
+                  <div style={{ fontSize:'14px', fontWeight:'600' }}>No comments yet</div>
+                  <div style={{ fontSize:'13px' }}>Be the first to say something!</div>
+                </div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:'1px' }}>
+                  {comments.map((comment, ci) => {
+                    const isMe = comment.authorId === currentUser?.uid;
+                    const liked = (comment.likes||[]).includes(currentUser?.uid);
+                    const likeCount = (comment.likes||[]).length;
+                    const isReply = !!comment.replyTo;
+                    return (
+                      <div key={comment.id} style={{ padding:'14px 0', borderBottom: ci < comments.length-1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                        <div style={{ display:'flex', gap:'10px' }}>
+                          <Avatar src={comment.authorPhoto} name={comment.authorName} size={34} style={{ flexShrink:0 }} />
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'4px' }}>
+                              <span style={{ fontSize:'13px', fontWeight:'700', color:'var(--text)' }}>{comment.authorName?.split(' ')[0]}</span>
+                              {isMe && <span style={{ fontSize:'11px', color:'var(--text3)' }}>· you</span>}
+                              <span style={{ fontSize:'11px', color:'var(--text3)', marginLeft:'auto' }}>{fmtTime(comment.createdAt)}</span>
+                            </div>
+                            {/* Reply quote */}
+                            {isReply && (
+                              <div style={{ padding:'6px 10px', background:'rgba(255,255,255,0.04)', borderLeft:'2px solid var(--border2)', borderRadius:'0 6px 6px 0', marginBottom:'6px', fontSize:'12px', color:'var(--text3)' }}>
+                                <strong style={{ color:'var(--text2)' }}>@{comment.replyTo.authorName?.split(' ')[0]}</strong>
+                                {comment.replyTo.preview ? ` "${comment.replyTo.preview}${comment.replyTo.preview.length >= 60 ? '…' : ''}"` : ''}
+                              </div>
+                            )}
+                            <div style={{ fontSize:'14px', lineHeight:'1.55', color:'var(--text)', wordBreak:'break-word' }}>
+                              {renderText(comment.text)}
+                            </div>
+                            {/* Actions */}
+                            <div style={{ display:'flex', alignItems:'center', gap:'14px', marginTop:'8px' }}>
+                              <button onClick={() => toggleLike(comment)} style={{ display:'flex', alignItems:'center', gap:'4px', background:'none', border:'none', cursor:'pointer', color: liked ? '#f87171' : 'var(--text3)', fontSize:'12px', fontWeight:'600', padding:0, transition:'color 0.15s' }}>
+                                <span style={{ fontSize:'14px' }}>{liked ? '❤️' : '🤍'}</span>
+                                {likeCount > 0 && <span>{likeCount}</span>}
+                              </button>
+                              <button onClick={() => { setReplyingTo({ id:comment.id, authorName:comment.authorName, text:comment.text }); inputRef.current?.focus(); }} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text3)', fontSize:'12px', fontWeight:'600', padding:0 }}>
+                                Reply
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       );
     }
+
 
     // ==================== COURTS SCREEN ====================
     function CourtsScreen({ setScreen }) {
