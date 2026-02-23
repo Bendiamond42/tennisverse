@@ -11437,6 +11437,13 @@ function App() {
       setRecoveredPlayers(s.gamePlayers);
     } catch (e) {}
   }, [currentUser]);
+
+  // Scroll to top on screen change
+  const screenKey = screen + (eventId || '');
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [screenKey]);
+
   if (loading) return /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: '100vh',
@@ -11526,14 +11533,6 @@ function App() {
   }];
   const showNav = !['create'].includes(screen) && !eventId;
 
-  // Scroll to top on every screen/route change
-  const screenKey = screen + (eventId || '');
-  React.useEffect(() => {
-    window.scrollTo({
-      top: 0,
-      behavior: 'instant'
-    });
-  }, [screenKey]);
   return /*#__PURE__*/React.createElement(React.Fragment, null, screen === 'home' && !eventId && /*#__PURE__*/React.createElement(HomeScreen, {
     key: "home",
     onCreateEvent: () => setScreen('create'),
