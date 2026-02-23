@@ -1091,8 +1091,13 @@
         invitedPlayers: [],
         notes: ''
       });
-      const [showDateTimePicker, setShowDateTimePicker] = useState(false);
-      const [dateTimeInitialStep, setDateTimeInitialStep] = useState('date');
+      const [showDatePicker, setShowDatePicker] = useState(false);
+      const [showTimePicker, setShowTimePicker] = useState(false);
+      const [manualCoachName, setManualCoachName] = useState('');
+      const [showManualCoach, setShowManualCoach] = useState(false);
+      const [manualPlayerName, setManualPlayerName] = useState('');
+      const [manualPlayerEmail, setManualPlayerEmail] = useState('');
+      const [showManualPlayer, setShowManualPlayer] = useState(false);
       const [coaches, setCoaches] = useState([]);
       const [showCoachPicker, setShowCoachPicker] = useState(false);
       const [coachSearch, setCoachSearch] = useState('');
@@ -1205,24 +1210,23 @@
 
             {/* ── DATE & TIME ── */}
             <SectionLabel>Date & Time</SectionLabel>
-            <div style={{ display:'flex', gap:'10px', marginBottom:'10px' }}>
-              {/* Date button */}
-              <div onClick={() => { setDateTimeInitialStep('date'); setShowDateTimePicker(true); }} style={{ flex:'1 1 55%', display:'flex', alignItems:'center', gap:'10px', padding:'13px 16px', background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:'var(--radius2)', cursor:'pointer' }}>
-                <I n="Calendar" s={17} c="var(--text3)" />
-                <span style={{ fontSize:'14px', fontWeight:'500' }}>{fmtDate(form.date)}</span>
+            <div style={{ display:'flex', gap:'10px', marginBottom:'20px' }}>
+              {/* Date button → opens inline calendar */}
+              <div onClick={() => setShowDatePicker(true)} style={{ flex:'1 1 55%', display:'flex', alignItems:'center', gap:'10px', padding:'13px 16px', background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:'var(--radius2)', cursor:'pointer' }}>
+                <I n="Calendar" s={17} c="var(--accent)" />
+                <div>
+                  <div style={{ fontSize:'11px', color:'var(--text3)', fontWeight:'600', letterSpacing:'0.05em', textTransform:'uppercase', marginBottom:'1px' }}>Date</div>
+                  <div style={{ fontSize:'14px', fontWeight:'700' }}>{fmtDate(form.date)}</div>
+                </div>
               </div>
-              {/* Time button */}
-              <div onClick={() => { setDateTimeInitialStep('time'); setShowDateTimePicker(true); }} style={{ flex:'1 1 45%', display:'flex', alignItems:'center', gap:'10px', padding:'13px 16px', background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:'var(--radius2)', cursor:'pointer' }}>
-                <I n="Clock" s={17} c="var(--text3)" />
-                <span style={{ fontSize:'14px', fontWeight:'500' }}>{fmtTime()}</span>
+              {/* Time button → opens time picker */}
+              <div onClick={() => setShowTimePicker(true)} style={{ flex:'1 1 45%', display:'flex', alignItems:'center', gap:'10px', padding:'13px 16px', background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:'var(--radius2)', cursor:'pointer' }}>
+                <I n="Clock" s={17} c="var(--accent)" />
+                <div>
+                  <div style={{ fontSize:'11px', color:'var(--text3)', fontWeight:'600', letterSpacing:'0.05em', textTransform:'uppercase', marginBottom:'1px' }}>Time</div>
+                  <div style={{ fontSize:'14px', fontWeight:'700' }}>{fmtTime()}</div>
+                </div>
               </div>
-            </div>
-            {/* Quick time chips */}
-            <div style={{ display:'flex', gap:'6px', marginBottom:'20px', flexWrap:'wrap' }}>
-              {[{l:'6 AM',h:6,m:0,a:'AM'},{l:'8 AM',h:8,m:0,a:'AM'},{l:'10 AM',h:10,m:0,a:'AM'},{l:'12 PM',h:12,m:0,a:'PM'},{l:'5 PM',h:5,m:0,a:'PM'},{l:'7 PM',h:7,m:0,a:'PM'},{l:'9 PM',h:9,m:0,a:'PM'}].map(t => {
-                const active = form.hour===t.h && form.minute===t.m && form.ampm===t.a;
-                return <button key={t.l} onClick={() => setForm(f=>({...f,hour:t.h,minute:t.m,ampm:t.a}))} style={{ padding:'6px 13px', borderRadius:'20px', border:`1px solid ${active?'var(--accent)':'var(--border)'}`, background:active?'var(--accent3)':'var(--surface)', color:active?'var(--accent)':'var(--text2)', fontSize:'12px', fontWeight:'600', cursor:'pointer', whiteSpace:'nowrap' }}>{t.l}</button>;
-              })}
             </div>
 
             {/* ── COACH ── */}
@@ -1230,18 +1234,23 @@
             <div style={{ marginBottom:'20px' }}>
               {form.coach ? (
                 <div style={{ display:'flex', alignItems:'center', gap:'12px', padding:'12px 16px', background:'rgba(96,165,250,0.08)', border:'1px solid rgba(96,165,250,0.3)', borderRadius:'var(--radius2)' }}>
-                  <Avatar src={form.coach.photoURL} name={`${form.coach.firstName} ${form.coach.lastName}`} size={40} />
+                  <div style={{ width:'40px', height:'40px', borderRadius:'50%', background:'rgba(96,165,250,0.15)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                    {form.coach.photoURL
+                      ? <Avatar src={form.coach.photoURL} name={`${form.coach.firstName} ${form.coach.lastName}`} size={40} />
+                      : <I n="Award" s={20} c="#93c5fd" />}
+                  </div>
                   <div style={{ flex:1 }}>
                     <div style={{ fontWeight:'700', fontSize:'14px' }}>{form.coach.firstName} {form.coach.lastName}</div>
-                    <div style={{ fontSize:'12px', color:'#93c5fd' }}>{form.coach.coachProfile?.title||'Coach'}{form.coach.coachProfile?.rate?` · $${form.coach.coachProfile.rate}/hr`:''}</div>
+                    <div style={{ fontSize:'12px', color:'#93c5fd' }}>{form.coach.manual ? 'Added manually' : (form.coach.coachProfile?.title||'Coach')}{form.coach.coachProfile?.rate?` · $${form.coach.coachProfile.rate}/hr`:''}</div>
                   </div>
                   <button onClick={() => setForm(f=>({...f,coach:null}))} style={{ background:'rgba(248,113,113,0.1)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:'8px', padding:'6px 10px', color:'var(--red)', cursor:'pointer', fontSize:'12px', fontWeight:'600' }}>Remove</button>
                 </div>
               ) : (
                 <>
-                  <div onClick={() => setShowCoachPicker(!showCoachPicker)} style={{ display:'flex', alignItems:'center', gap:'12px', padding:'13px 16px', background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:showCoachPicker ? 'var(--radius2) var(--radius2) 0 0' : 'var(--radius2)', cursor:'pointer' }}>
+                  {/* Search existing coaches */}
+                  <div onClick={() => { setShowCoachPicker(!showCoachPicker); setShowManualCoach(false); }} style={{ display:'flex', alignItems:'center', gap:'12px', padding:'13px 16px', background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:showCoachPicker ? 'var(--radius2) var(--radius2) 0 0' : 'var(--radius2)', cursor:'pointer' }}>
                     <I n="Award" s={17} c="var(--text3)" />
-                    <span style={{ fontSize:'14px', color:'var(--text3)', flex:1 }}>Assign a coach...</span>
+                    <span style={{ fontSize:'14px', color:'var(--text3)', flex:1 }}>Search coaches on Tennisverse...</span>
                     <I n={showCoachPicker?'ChevronDown':'ChevronRight'} s={16} c="var(--text3)" />
                   </div>
                   {showCoachPicker && (
@@ -1250,18 +1259,46 @@
                         <input value={coachSearch} onChange={e=>setCoachSearch(e.target.value)} placeholder="Search coaches..." autoFocus style={{ width:'100%', background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:'var(--radius3)', padding:'8px 12px', color:'var(--text)', fontSize:'14px', outline:'none' }} />
                       </div>
                       <div style={{ maxHeight:'200px', overflowY:'auto' }}>
-                        {filteredCoaches.length===0 ? <div style={{ padding:'16px', textAlign:'center', color:'var(--text3)', fontSize:'13px' }}>{coaches.length===0?'No coaches on the platform yet':'No coaches found'}</div>
-                          : filteredCoaches.map(c => (
-                          <div key={c.id} onClick={() => { setForm(f=>({...f,coach:c})); setShowCoachPicker(false); setCoachSearch(''); }} style={{ display:'flex', alignItems:'center', gap:'12px', padding:'11px 16px', borderBottom:'1px solid var(--border)', cursor:'pointer' }}>
-                            <Avatar src={c.photoURL} name={`${c.firstName} ${c.lastName}`} size={38} />
-                            <div style={{ flex:1 }}>
-                              <div style={{ fontWeight:'600', fontSize:'14px' }}>{c.firstName} {c.lastName}</div>
-                              <div style={{ fontSize:'12px', color:'var(--text2)' }}>{c.coachProfile?.title||'Coach'}{c.coachProfile?.rate?` · $${c.coachProfile.rate}/hr`:''}</div>
+                        {filteredCoaches.length===0
+                          ? <div style={{ padding:'14px 16px', textAlign:'center', color:'var(--text3)', fontSize:'13px' }}>{coaches.length===0?'No coaches on Tennisverse yet':'No coaches match that name'}</div>
+                          : filteredCoaches.map(coach => (
+                            <div key={coach.id} onClick={() => { setForm(f=>({...f,coach})); setShowCoachPicker(false); setCoachSearch(''); }} style={{ display:'flex', alignItems:'center', gap:'12px', padding:'11px 16px', borderBottom:'1px solid var(--border)', cursor:'pointer' }}>
+                              <Avatar src={coach.photoURL} name={`${coach.firstName} ${coach.lastName}`} size={38} />
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontWeight:'600', fontSize:'14px' }}>{coach.firstName} {coach.lastName}</div>
+                                <div style={{ fontSize:'12px', color:'var(--text2)' }}>{coach.coachProfile?.title||'Coach'}{coach.coachProfile?.rate?` · $${coach.coachProfile.rate}/hr`:''}</div>
+                              </div>
+                              <I n="ChevronRight" s={14} c="var(--text3)" />
                             </div>
-                            <I n="ChevronRight" s={14} c="var(--text3)" />
-                          </div>
-                        ))}
+                          ))}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Add coach manually */}
+                  <div onClick={() => { setShowManualCoach(!showManualCoach); setShowCoachPicker(false); }} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 16px', marginTop:'8px', background:'transparent', border:'1px dashed rgba(255,255,255,0.12)', borderRadius:'var(--radius2)', cursor:'pointer' }}>
+                    <I n="Plus" s={15} c="var(--text3)" />
+                    <span style={{ fontSize:'13px', color:'var(--text3)', fontWeight:'600' }}>Add coach by name (not on app)</span>
+                  </div>
+                  {showManualCoach && (
+                    <div style={{ padding:'14px 16px', background:'var(--surface)', border:'1px solid var(--border2)', borderTop:'none', borderRadius:'0 0 var(--radius2) var(--radius2)', marginTop:'-1px' }}>
+                      <input
+                        value={manualCoachName}
+                        onChange={e => setManualCoachName(e.target.value)}
+                        placeholder="Coach name..."
+                        autoFocus
+                        style={{ width:'100%', padding:'11px 14px', background:'var(--bg)', border:'1px solid var(--border2)', borderRadius:'var(--radius3)', color:'var(--text)', fontSize:'14px', outline:'none', marginBottom:'10px' }}
+                      />
+                      <button
+                        disabled={!manualCoachName.trim()}
+                        onClick={() => {
+                          if (!manualCoachName.trim()) return;
+                          const [firstName, ...rest] = manualCoachName.trim().split(' ');
+                          setForm(f => ({...f, coach:{ id:'manual_'+Date.now(), firstName, lastName:rest.join(' ')||'', manual:true }}));
+                          setManualCoachName(''); setShowManualCoach(false);
+                        }}
+                        style={{ width:'100%', padding:'11px', borderRadius:'var(--radius2)', background: manualCoachName.trim() ? 'var(--accent)' : 'var(--surface2)', border:'none', color: manualCoachName.trim() ? '#050a14' : 'var(--text3)', fontSize:'14px', fontWeight:'700', cursor: manualCoachName.trim() ? 'pointer' : 'default' }}
+                      >Add Coach</button>
                     </div>
                   )}
                 </>
@@ -1271,19 +1308,24 @@
             {/* ── INVITE PLAYERS ── */}
             <SectionLabel>Invite Players (optional)</SectionLabel>
             <div style={{ marginBottom:'20px' }}>
+              {/* Selected player chips */}
               {form.invitedPlayers.length > 0 && (
                 <div style={{ display:'flex', flexWrap:'wrap', gap:'6px', marginBottom:'10px' }}>
                   {form.invitedPlayers.map(u => (
-                    <div key={u.id} onClick={() => toggleInvite(u)} style={{ display:'flex', alignItems:'center', gap:'6px', background:'var(--accent3)', border:'1px solid rgba(74,222,128,0.35)', borderRadius:'20px', padding:'5px 10px 5px 7px', cursor:'pointer', fontSize:'13px', color:'var(--accent)', fontWeight:'600' }}>
-                      <Avatar src={u.photoURL} name={`${u.firstName} ${u.lastName}`} size={20} />
-                      {u.firstName} <I n="X" s={12} c="var(--accent)" />
+                    <div key={u.id} onClick={() => toggleInvite(u)} style={{ display:'flex', alignItems:'center', gap:'6px', background: u.manual ? 'rgba(251,191,36,0.1)' : 'var(--accent3)', border:`1px solid ${u.manual ? 'rgba(251,191,36,0.3)' : 'rgba(74,222,128,0.35)'}`, borderRadius:'20px', padding:'5px 10px 5px 7px', cursor:'pointer', fontSize:'13px', color: u.manual ? '#fbbf24' : 'var(--accent)', fontWeight:'600' }}>
+                      {u.manual
+                        ? <I n="UserPlus" s={13} c="#fbbf24" />
+                        : <Avatar src={u.photoURL} name={`${u.firstName} ${u.lastName}`} size={20} />}
+                      {u.firstName}{u.lastName ? ' '+u.lastName.charAt(0)+'.' : ''} <I n="X" s={12} c="currentColor" />
                     </div>
                   ))}
                 </div>
               )}
-              <div onClick={() => setShowInvitePicker(!showInvitePicker)} style={{ display:'flex', alignItems:'center', gap:'12px', padding:'13px 16px', background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:showInvitePicker?'var(--radius2) var(--radius2) 0 0':'var(--radius2)', cursor:'pointer' }}>
+
+              {/* Search Tennisverse users */}
+              <div onClick={() => { setShowInvitePicker(!showInvitePicker); setShowManualPlayer(false); }} style={{ display:'flex', alignItems:'center', gap:'12px', padding:'13px 16px', background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:showInvitePicker?'var(--radius2) var(--radius2) 0 0':'var(--radius2)', cursor:'pointer' }}>
                 <I n="Users" s={17} c="var(--text3)" />
-                <span style={{ fontSize:'14px', color:'var(--text3)', flex:1 }}>{form.invitedPlayers.length>0 ? `${form.invitedPlayers.length} player${form.invitedPlayers.length>1?'s':''} invited` : 'Invite players...'}</span>
+                <span style={{ fontSize:'14px', color:'var(--text3)', flex:1 }}>{form.invitedPlayers.length>0 ? `${form.invitedPlayers.length} player${form.invitedPlayers.length>1?'s':''} invited` : 'Search players on Tennisverse...'}</span>
                 <I n={showInvitePicker?'ChevronDown':'ChevronRight'} s={16} c="var(--text3)" />
               </div>
               {showInvitePicker && (
@@ -1292,7 +1334,8 @@
                     <input value={inviteSearch} onChange={e=>setInviteSearch(e.target.value)} placeholder="Search players..." autoFocus style={{ width:'100%', background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:'var(--radius3)', padding:'8px 12px', color:'var(--text)', fontSize:'14px', outline:'none' }} />
                   </div>
                   <div style={{ maxHeight:'220px', overflowY:'auto' }}>
-                    {filteredUsers.length===0 ? <div style={{ padding:'16px', textAlign:'center', color:'var(--text3)', fontSize:'13px' }}>No players found</div>
+                    {filteredUsers.length===0
+                      ? <div style={{ padding:'14px 16px', textAlign:'center', color:'var(--text3)', fontSize:'13px' }}>No players match that name</div>
                       : filteredUsers.slice(0,30).map(u => {
                         const invited = form.invitedPlayers.some(p => p.id===u.id);
                         return (
@@ -1311,6 +1354,41 @@
                       })
                     }
                   </div>
+                </div>
+              )}
+
+              {/* Add player manually */}
+              <div onClick={() => { setShowManualPlayer(!showManualPlayer); setShowInvitePicker(false); }} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 16px', marginTop:'8px', background:'transparent', border:'1px dashed rgba(255,255,255,0.12)', borderRadius:'var(--radius2)', cursor:'pointer' }}>
+                <I n="Plus" s={15} c="var(--text3)" />
+                <span style={{ fontSize:'13px', color:'var(--text3)', fontWeight:'600' }}>Add player manually (not on app)</span>
+              </div>
+              {showManualPlayer && (
+                <div style={{ padding:'14px 16px', background:'var(--surface)', border:'1px solid var(--border2)', borderTop:'none', borderRadius:'0 0 var(--radius2) var(--radius2)', marginTop:'-1px' }}>
+                  <input
+                    value={manualPlayerName}
+                    onChange={e => setManualPlayerName(e.target.value)}
+                    placeholder="Full name *"
+                    style={{ width:'100%', padding:'11px 14px', background:'var(--bg)', border:'1px solid var(--border2)', borderRadius:'var(--radius3)', color:'var(--text)', fontSize:'14px', outline:'none', marginBottom:'8px' }}
+                  />
+                  <input
+                    value={manualPlayerEmail}
+                    onChange={e => setManualPlayerEmail(e.target.value)}
+                    placeholder="Email address (optional)"
+                    type="email"
+                    style={{ width:'100%', padding:'11px 14px', background:'var(--bg)', border:'1px solid var(--border2)', borderRadius:'var(--radius3)', color:'var(--text)', fontSize:'14px', outline:'none', marginBottom:'10px' }}
+                  />
+                  <button
+                    disabled={!manualPlayerName.trim()}
+                    onClick={() => {
+                      if (!manualPlayerName.trim()) return;
+                      const [firstName, ...rest] = manualPlayerName.trim().split(' ');
+                      const id = 'manual_' + Date.now();
+                      const newPlayer = { id, firstName, lastName:rest.join(' ')||'', email:manualPlayerEmail.trim()||'', manual:true };
+                      setForm(f => ({...f, invitedPlayers:[...f.invitedPlayers, newPlayer]}));
+                      setManualPlayerName(''); setManualPlayerEmail(''); setShowManualPlayer(false);
+                    }}
+                    style={{ width:'100%', padding:'11px', borderRadius:'var(--radius2)', background: manualPlayerName.trim() ? 'var(--accent)' : 'var(--surface2)', border:'none', color: manualPlayerName.trim() ? '#050a14' : 'var(--text3)', fontSize:'14px', fontWeight:'700', cursor: manualPlayerName.trim() ? 'pointer' : 'default' }}
+                  >Add Player</button>
                 </div>
               )}
             </div>
@@ -1363,31 +1441,32 @@
             <Btn onClick={handleSubmit} disabled={saving} size="lg">{saving ? 'Creating...' : 'Create Game'}</Btn>
           </div>
 
-          {/* ── DATE/TIME PICKER MODAL ── */}
-          {showDateTimePicker && (
-            <DateTimePickerModal
-              date={form.date} hour={form.hour} minute={form.minute} ampm={form.ampm}
-              initialStep={dateTimeInitialStep}
-              onConfirm={(date, hour, minute, ampm) => { setForm(f=>({...f,date,hour,minute,ampm})); setShowDateTimePicker(false); }}
-              onClose={() => setShowDateTimePicker(false)}
+          {/* ── DATE PICKER MODAL ── */}
+          {showDatePicker && (
+            <DatePickerModal
+              date={form.date}
+              onConfirm={(d) => { setForm(f=>({...f,date:d})); setShowDatePicker(false); }}
+              onClose={() => setShowDatePicker(false)}
+            />
+          )}
+          {/* ── TIME PICKER MODAL ── */}
+          {showTimePicker && (
+            <TimePickerModal
+              hour={form.hour} minute={form.minute} ampm={form.ampm}
+              onConfirm={(hour, minute, ampm) => { setForm(f=>({...f,hour,minute,ampm})); setShowTimePicker(false); }}
+              onClose={() => setShowTimePicker(false)}
             />
           )}
         </div>
       );
     }
 
-    // ==================== DATE+TIME PICKER MODAL ====================
-    function DateTimePickerModal({ date, hour, minute, ampm, onConfirm, onClose, initialStep }) {
-      const [step, setStep] = useState(initialStep || 'date');
+    // ==================== DATE PICKER MODAL ====================
+    function DatePickerModal({ date, onConfirm, onClose }) {
       const [selDate, setSelDate] = useState(date || new Date());
-      const [selHour, setSelHour] = useState(hour || 12);
-      const [selMinute, setSelMinute] = useState(minute || 0);
-      const [selAmpm, setSelAmpm] = useState(ampm || 'PM');
-      const [calView, setCalView] = useState(new Date(selDate));
+      const [calView, setCalView] = useState(new Date(date || new Date()));
       const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-      const shortMonths = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       const days = ['S','M','T','W','T','F','S'];
-
       const getDays = d => new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
       const getFirst = d => new Date(d.getFullYear(),d.getMonth(),1).getDay();
       const isToday = day => { const t=new Date(); return day===t.getDate()&&calView.getMonth()===t.getMonth()&&calView.getFullYear()===t.getFullYear(); };
@@ -1395,107 +1474,105 @@
       const isPast = day => { const t=new Date(); t.setHours(0,0,0,0); return new Date(calView.getFullYear(),calView.getMonth(),day)<t; };
       const cells = []; for(let i=0;i<getFirst(calView);i++) cells.push(null); for(let i=1;i<=getDays(calView);i++) cells.push(i);
 
-      const selDateStr = `${selDate.toLocaleDateString('en-US',{weekday:'short'})}, ${shortMonths[selDate.getMonth()]} ${selDate.getDate()}`;
-      const selTimeStr = `${String(selHour).padStart(2,'0')}:${String(selMinute).padStart(2,'0')} ${selAmpm}`;
-
       return (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(4px)', zIndex:5000, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
-          <div style={{ width:'100%', maxWidth:'500px', background:'var(--bg2)', borderRadius:'24px 24px 0 0', overflow:'hidden', animation:'slideUpFull 0.3s ease-out' }}>
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.65)', backdropFilter:'blur(6px)', zIndex:5000, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={onClose}>
+          <div style={{ width:'100%', maxWidth:'500px', background:'var(--bg2)', borderRadius:'24px 24px 0 0', overflow:'hidden', animation:'slideUpFull 0.3s ease-out', paddingBottom:'env(safe-area-inset-bottom)' }} onClick={e => e.stopPropagation()}>
             {/* Header */}
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'20px 20px 0' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'20px 20px 16px', borderBottom:'1px solid var(--border)' }}>
               <button onClick={onClose} style={{ background:'var(--surface)', border:'none', borderRadius:'10px', padding:'8px 14px', color:'var(--text2)', fontSize:'14px', fontWeight:'600', cursor:'pointer' }}>Cancel</button>
-              <div style={{ display:'flex', background:'var(--surface)', borderRadius:'10px', padding:'3px' }}>
-                <button onClick={() => setStep('date')} style={{ padding:'7px 18px', borderRadius:'8px', background:step==='date'?'var(--accent)':'transparent', color:step==='date'?'#050a14':'var(--text2)', fontSize:'13px', fontWeight:'700', border:'none', cursor:'pointer', transition:'all 0.15s' }}>Date</button>
-                <button onClick={() => setStep('time')} style={{ padding:'7px 18px', borderRadius:'8px', background:step==='time'?'var(--accent)':'transparent', color:step==='time'?'#050a14':'var(--text2)', fontSize:'13px', fontWeight:'700', border:'none', cursor:'pointer', transition:'all 0.15s' }}>Time</button>
-              </div>
-              <button onClick={() => onConfirm(selDate, selHour, selMinute, selAmpm)} style={{ background:'var(--accent)', border:'none', borderRadius:'10px', padding:'8px 16px', color:'#050a14', fontSize:'14px', fontWeight:'700', cursor:'pointer' }}>Done</button>
+              <div style={{ fontWeight:'800', fontSize:'16px' }}>Pick a Date</div>
+              <button onClick={() => onConfirm(selDate)} style={{ background:'var(--accent)', border:'none', borderRadius:'10px', padding:'8px 16px', color:'#050a14', fontSize:'14px', fontWeight:'700', cursor:'pointer' }}>Done</button>
             </div>
-
-            {/* Summary strip */}
-            <div style={{ display:'flex', gap:'8px', padding:'16px 20px', borderBottom:'1px solid var(--border)' }}>
-              <div onClick={() => setStep('date')} style={{ flex:1, padding:'10px 14px', background: step==='date' ? 'var(--accent3)' : 'var(--surface)', border:`1px solid ${step==='date'?'var(--accent)':'var(--border)'}`, borderRadius:'var(--radius2)', cursor:'pointer' }}>
-                <div style={{ fontSize:'11px', color:'var(--text3)', fontWeight:'600', letterSpacing:'0.05em', textTransform:'uppercase', marginBottom:'3px' }}>Date</div>
-                <div style={{ fontSize:'15px', fontWeight:'700', color: step==='date'?'var(--accent)':'var(--text)' }}>{selDateStr}</div>
+            {/* Calendar */}
+            <div style={{ padding:'16px 20px 32px' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px' }}>
+                <button onClick={() => setCalView(new Date(calView.getFullYear(),calView.getMonth()-1,1))} style={{ width:'36px', height:'36px', borderRadius:'10px', background:'var(--surface)', border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><I n="ChevronLeft" s={16} c="var(--text2)" /></button>
+                <span style={{ fontWeight:'700', fontSize:'16px' }}>{months[calView.getMonth()]} {calView.getFullYear()}</span>
+                <button onClick={() => setCalView(new Date(calView.getFullYear(),calView.getMonth()+1,1))} style={{ width:'36px', height:'36px', borderRadius:'10px', background:'var(--surface)', border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><I n="ChevronRight" s={16} c="var(--text2)" /></button>
               </div>
-              <div onClick={() => setStep('time')} style={{ flex:1, padding:'10px 14px', background: step==='time' ? 'var(--accent3)' : 'var(--surface)', border:`1px solid ${step==='time'?'var(--accent)':'var(--border)'}`, borderRadius:'var(--radius2)', cursor:'pointer' }}>
-                <div style={{ fontSize:'11px', color:'var(--text3)', fontWeight:'600', letterSpacing:'0.05em', textTransform:'uppercase', marginBottom:'3px' }}>Time</div>
-                <div style={{ fontSize:'15px', fontWeight:'700', color: step==='time'?'var(--accent)':'var(--text)' }}>{selTimeStr}</div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:'2px', marginBottom:'4px' }}>
+                {days.map((d,i) => <div key={i} style={{ textAlign:'center', fontSize:'11px', color:'var(--text3)', padding:'6px 2px', fontWeight:'700', letterSpacing:'0.03em' }}>{d}</div>)}
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:'4px' }}>
+                {cells.map((day,i) => (
+                  <div key={i}
+                    onClick={() => { if(day&&!isPast(day)) { const nd=new Date(calView.getFullYear(),calView.getMonth(),day); setSelDate(nd); onConfirm(nd); } }}
+                    style={{ aspectRatio:'1', display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'50%', fontSize:'14px', fontWeight:isSel(day)?'800':'500', cursor:day&&!isPast(day)?'pointer':'default', background:isSel(day)?'var(--accent)':isToday(day)?'var(--accent3)':'transparent', color:!day?'transparent':isPast(day)?'var(--text3)':isSel(day)?'#050a14':'var(--text)', border:isToday(day)&&!isSel(day)?'1px solid var(--accent)':'none', transition:'background 0.1s' }}>
+                    {day}
+                  </div>
+                ))}
               </div>
             </div>
-
-            {/* Date view */}
-            {step === 'date' && (
-              <div style={{ padding:'16px 20px 32px' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px' }}>
-                  <button onClick={() => setCalView(new Date(calView.getFullYear(),calView.getMonth()-1,1))} style={{ width:'36px', height:'36px', borderRadius:'10px', background:'var(--surface)', border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><I n="ChevronLeft" s={16} c="var(--text2)" /></button>
-                  <span style={{ fontWeight:'700', fontSize:'16px' }}>{months[calView.getMonth()]} {calView.getFullYear()}</span>
-                  <button onClick={() => setCalView(new Date(calView.getFullYear(),calView.getMonth()+1,1))} style={{ width:'36px', height:'36px', borderRadius:'10px', background:'var(--surface)', border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><I n="ChevronRight" s={16} c="var(--text2)" /></button>
-                </div>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:'2px', marginBottom:'4px' }}>
-                  {days.map((d,i) => <div key={i} style={{ textAlign:'center', fontSize:'11px', color:'var(--text3)', padding:'6px 2px', fontWeight:'700', letterSpacing:'0.03em' }}>{d}</div>)}
-                </div>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:'4px' }}>
-                  {cells.map((day,i) => (
-                    <div key={i} onClick={() => { if(day&&!isPast(day)) { const nd=new Date(calView.getFullYear(),calView.getMonth(),day); setSelDate(nd); setStep('time'); } }}
-                      style={{ aspectRatio:'1', display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'50%', fontSize:'14px', fontWeight:isSel(day)?'800':'500', cursor:day&&!isPast(day)?'pointer':'default', background:isSel(day)?'var(--accent)':isToday(day)?'var(--accent3)':'transparent', color:!day?'transparent':isPast(day)?'var(--text3)':isSel(day)?'#050a14':'var(--text)', border:isToday(day)&&!isSel(day)?'1px solid var(--accent)':'none', transition:'background 0.1s' }}>
-                      {day}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Time view */}
-            {step === 'time' && (
-              <div style={{ padding:'24px 20px 40px' }}>
-                {/* Quick presets */}
-                <div style={{ display:'flex', gap:'6px', marginBottom:'24px', flexWrap:'wrap' }}>
-                  {[{l:'6 AM',h:6,m:0,a:'AM'},{l:'7 AM',h:7,m:0,a:'AM'},{l:'8 AM',h:8,m:0,a:'AM'},{l:'9 AM',h:9,m:0,a:'AM'},{l:'10 AM',h:10,m:0,a:'AM'},{l:'12 PM',h:12,m:0,a:'PM'},{l:'2 PM',h:2,m:0,a:'PM'},{l:'4 PM',h:4,m:0,a:'PM'},{l:'5 PM',h:5,m:0,a:'PM'},{l:'6 PM',h:6,m:0,a:'PM'},{l:'7 PM',h:7,m:0,a:'PM'},{l:'8 PM',h:8,m:0,a:'PM'},{l:'9 PM',h:9,m:0,a:'PM'}].map(t => {
-                    const active = selHour===t.h&&selMinute===t.m&&selAmpm===t.a;
-                    return <button key={t.l} onClick={()=>{setSelHour(t.h);setSelMinute(t.m);setSelAmpm(t.a);}} style={{ padding:'7px 13px', borderRadius:'20px', border:`1px solid ${active?'var(--accent)':'var(--border)'}`, background:active?'var(--accent3)':'var(--surface)', color:active?'var(--accent)':'var(--text2)', fontSize:'13px', fontWeight:'600', cursor:'pointer', whiteSpace:'nowrap', transition:'all 0.1s' }}>{t.l}</button>;
-                  })}
-                </div>
-
-                {/* Drum roller */}
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', padding:'16px', background:'var(--surface)', borderRadius:'var(--radius)', border:'1px solid var(--border)' }}>
-                  {/* Hour column */}
-                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'4px' }}>
-                    <button onClick={()=>setSelHour(h=>h===12?1:h+1)} style={{ width:'44px', height:'36px', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'var(--radius3)', color:'var(--text2)', fontSize:'16px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>▲</button>
-                    <div style={{ width:'64px', height:'56px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'32px', fontWeight:'900', fontFamily:"'DM Mono',monospace", color:'var(--text)' }}>{String(selHour).padStart(2,'0')}</div>
-                    <button onClick={()=>setSelHour(h=>h===1?12:h-1)} style={{ width:'44px', height:'36px', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'var(--radius3)', color:'var(--text2)', fontSize:'16px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>▼</button>
-                    <div style={{ fontSize:'11px', color:'var(--text3)', fontWeight:'600', letterSpacing:'0.05em', textTransform:'uppercase', marginTop:'2px' }}>Hour</div>
-                  </div>
-
-                  <div style={{ fontSize:'32px', fontWeight:'900', color:'var(--text3)', marginBottom:'24px', paddingTop:'4px' }}>:</div>
-
-                  {/* Minute column — 15-min increments */}
-                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'4px' }}>
-                    <button onClick={()=>setSelMinute(m=>m===45?0:m+15)} style={{ width:'44px', height:'36px', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'var(--radius3)', color:'var(--text2)', fontSize:'16px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>▲</button>
-                    <div style={{ width:'64px', height:'56px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'32px', fontWeight:'900', fontFamily:"'DM Mono',monospace", color:'var(--text)' }}>{String(selMinute).padStart(2,'0')}</div>
-                    <button onClick={()=>setSelMinute(m=>m===0?45:m-15)} style={{ width:'44px', height:'36px', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'var(--radius3)', color:'var(--text2)', fontSize:'16px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>▼</button>
-                    <div style={{ fontSize:'11px', color:'var(--text3)', fontWeight:'600', letterSpacing:'0.05em', textTransform:'uppercase', marginTop:'2px' }}>Min</div>
-                  </div>
-
-                  {/* AM / PM column */}
-                  <div style={{ display:'flex', flexDirection:'column', gap:'8px', marginLeft:'8px' }}>
-                    {['AM','PM'].map(p => (
-                      <button key={p} onClick={()=>setSelAmpm(p)} style={{ width:'56px', padding:'14px 8px', borderRadius:'var(--radius2)', background:selAmpm===p?'var(--accent)':'var(--surface2)', border:`1px solid ${selAmpm===p?'var(--accent)':'var(--border)'}`, color:selAmpm===p?'#050a14':'var(--text2)', fontSize:'14px', fontWeight:'800', cursor:'pointer', transition:'all 0.15s' }}>{p}</button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Minute quick-select */}
-                <div style={{ display:'flex', gap:'8px', marginTop:'12px', justifyContent:'center' }}>
-                  {[0,15,30,45].map(m => (
-                    <button key={m} onClick={()=>setSelMinute(m)} style={{ flex:1, padding:'10px', borderRadius:'var(--radius3)', border:`1px solid ${selMinute===m?'var(--accent)':'var(--border)'}`, background:selMinute===m?'var(--accent3)':'var(--surface)', color:selMinute===m?'var(--accent)':'var(--text2)', fontSize:'14px', fontWeight:'700', cursor:'pointer', fontFamily:"'DM Mono',monospace" }}>:{String(m).padStart(2,'0')}</button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       );
     }
+
+    // ==================== TIME PICKER MODAL ====================
+    function TimePickerModal({ hour, minute, ampm, onConfirm, onClose }) {
+      const [selHour, setSelHour] = useState(hour || 12);
+      const [selMinute, setSelMinute] = useState(minute || 0);
+      const [selAmpm, setSelAmpm] = useState(ampm || 'PM');
+
+      return (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.65)', backdropFilter:'blur(6px)', zIndex:5000, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={onClose}>
+          <div style={{ width:'100%', maxWidth:'500px', background:'var(--bg2)', borderRadius:'24px 24px 0 0', overflow:'hidden', animation:'slideUpFull 0.3s ease-out', paddingBottom:'env(safe-area-inset-bottom)' }} onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'20px 20px 16px', borderBottom:'1px solid var(--border)' }}>
+              <button onClick={onClose} style={{ background:'var(--surface)', border:'none', borderRadius:'10px', padding:'8px 14px', color:'var(--text2)', fontSize:'14px', fontWeight:'600', cursor:'pointer' }}>Cancel</button>
+              <div style={{ fontWeight:'800', fontSize:'16px' }}>Pick a Time</div>
+              <button onClick={() => onConfirm(selHour, selMinute, selAmpm)} style={{ background:'var(--accent)', border:'none', borderRadius:'10px', padding:'8px 16px', color:'#050a14', fontSize:'14px', fontWeight:'700', cursor:'pointer' }}>Done</button>
+            </div>
+
+            <div style={{ padding:'24px 20px 40px' }}>
+              {/* Quick time presets */}
+              <div style={{ display:'flex', gap:'6px', marginBottom:'24px', flexWrap:'wrap' }}>
+                {[{l:'6 AM',h:6,m:0,a:'AM'},{l:'7 AM',h:7,m:0,a:'AM'},{l:'8 AM',h:8,m:0,a:'AM'},{l:'9 AM',h:9,m:0,a:'AM'},{l:'10 AM',h:10,m:0,a:'AM'},{l:'12 PM',h:12,m:0,a:'PM'},{l:'2 PM',h:2,m:0,a:'PM'},{l:'4 PM',h:4,m:0,a:'PM'},{l:'5 PM',h:5,m:0,a:'PM'},{l:'6 PM',h:6,m:0,a:'PM'},{l:'7 PM',h:7,m:0,a:'PM'},{l:'8 PM',h:8,m:0,a:'PM'},{l:'9 PM',h:9,m:0,a:'PM'}].map(t => {
+                  const active = selHour===t.h&&selMinute===t.m&&selAmpm===t.a;
+                  return <button key={t.l} onClick={() => { setSelHour(t.h); setSelMinute(t.m); setSelAmpm(t.a); }} style={{ padding:'6px 13px', borderRadius:'20px', border:`1px solid ${active?'var(--accent)':'var(--border)'}`, background:active?'var(--accent3)':'var(--surface)', color:active?'var(--accent)':'var(--text2)', fontSize:'12px', fontWeight:'600', cursor:'pointer', whiteSpace:'nowrap' }}>{t.l}</button>;
+                })}
+              </div>
+
+              {/* Drum roller: Hour : Min AM/PM */}
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', padding:'20px 16px', background:'var(--surface)', borderRadius:'var(--radius)', border:'1px solid var(--border)' }}>
+                {/* Hour */}
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'4px' }}>
+                  <button onClick={() => setSelHour(h => h===12?1:h+1)} style={{ width:'44px', height:'36px', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'var(--radius3)', color:'var(--text2)', fontSize:'18px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>▲</button>
+                  <div style={{ width:'64px', height:'56px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'32px', fontWeight:'900', fontFamily:"'DM Mono',monospace", color:'var(--text)' }}>{String(selHour).padStart(2,'0')}</div>
+                  <button onClick={() => setSelHour(h => h===1?12:h-1)} style={{ width:'44px', height:'36px', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'var(--radius3)', color:'var(--text2)', fontSize:'18px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>▼</button>
+                  <div style={{ fontSize:'11px', color:'var(--text3)', fontWeight:'700', letterSpacing:'0.05em', textTransform:'uppercase', marginTop:'2px' }}>Hour</div>
+                </div>
+
+                <div style={{ fontSize:'32px', fontWeight:'900', color:'var(--text3)', marginBottom:'24px' }}>:</div>
+
+                {/* Minute */}
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'4px' }}>
+                  <button onClick={() => setSelMinute(m => m===45?0:m+15)} style={{ width:'44px', height:'36px', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'var(--radius3)', color:'var(--text2)', fontSize:'18px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>▲</button>
+                  <div style={{ width:'64px', height:'56px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'32px', fontWeight:'900', fontFamily:"'DM Mono',monospace", color:'var(--text)' }}>{String(selMinute).padStart(2,'0')}</div>
+                  <button onClick={() => setSelMinute(m => m===0?45:m-15)} style={{ width:'44px', height:'36px', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'var(--radius3)', color:'var(--text2)', fontSize:'18px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>▼</button>
+                  <div style={{ fontSize:'11px', color:'var(--text3)', fontWeight:'700', letterSpacing:'0.05em', textTransform:'uppercase', marginTop:'2px' }}>Min</div>
+                </div>
+
+                {/* AM/PM */}
+                <div style={{ display:'flex', flexDirection:'column', gap:'8px', marginLeft:'8px' }}>
+                  {['AM','PM'].map(p => (
+                    <button key={p} onClick={() => setSelAmpm(p)} style={{ width:'56px', padding:'14px 8px', borderRadius:'var(--radius2)', background:selAmpm===p?'var(--accent)':'var(--surface2)', border:`1px solid ${selAmpm===p?'var(--accent)':'var(--border)'}`, color:selAmpm===p?'#050a14':'var(--text2)', fontSize:'14px', fontWeight:'800', cursor:'pointer', transition:'all 0.15s' }}>{p}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Minute quick-select */}
+              <div style={{ display:'flex', gap:'8px', marginTop:'12px', justifyContent:'center' }}>
+                {[0,15,30,45].map(m => (
+                  <button key={m} onClick={() => setSelMinute(m)} style={{ flex:1, padding:'10px', borderRadius:'var(--radius3)', border:`1px solid ${selMinute===m?'var(--accent)':'var(--border)'}`, background:selMinute===m?'var(--accent3)':'var(--surface)', color:selMinute===m?'var(--accent)':'var(--text2)', fontSize:'14px', fontWeight:'700', cursor:'pointer', fontFamily:"'DM Mono',monospace" }}>:{String(m).padStart(2,'0')}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
 
     function CalendarModal({ selected, onSelect, onClose }) {
       const [view, setView] = useState(selected || new Date());
