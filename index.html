@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <!-- build: 1771862556 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -12212,6 +12213,15 @@ function App() {
       setRecoveredPlayers(s.gamePlayers);
     } catch (e) {}
   }, [currentUser]);
+
+  // Scroll to top on every screen/route change — MUST be before any early returns
+  const screenKey = screen + (eventId || '');
+  React.useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'instant'
+    });
+  }, [screenKey]);
   if (loading) return /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: '100vh',
@@ -12300,15 +12310,6 @@ function App() {
     icon: 'User'
   }];
   const showNav = !['create'].includes(screen) && !eventId;
-
-  // Scroll to top on every screen/route change
-  const screenKey = screen + (eventId || '');
-  React.useEffect(() => {
-    window.scrollTo({
-      top: 0,
-      behavior: 'instant'
-    });
-  }, [screenKey]);
   return /*#__PURE__*/React.createElement(React.Fragment, null, screen === 'home' && !eventId && /*#__PURE__*/React.createElement(HomeScreen, {
     key: "home",
     onCreateEvent: () => setScreen('create'),
