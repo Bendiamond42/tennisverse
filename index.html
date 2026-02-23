@@ -1039,6 +1039,7 @@
       };
 
       return (
+        <>
         <div style={{ minHeight:'100vh', background:'var(--bg)', paddingBottom:'100px' }}>
           <div style={{ maxWidth:'500px', margin:'0 auto', padding:'24px 20px' }}>
             <PageHeader title="Games" right={<Btn onClick={onCreateEvent} size="sm" icon="Plus">New</Btn>} />
@@ -1079,6 +1080,7 @@
             <I n="Plus" s={22} c="#050a14" />
           </button>
         </div>
+        </>
       );
     }
 
@@ -1677,8 +1679,7 @@
           `DTEND:${fmt(end)}`,
           `SUMMARY:${event.title}`,
           event.location ? `LOCATION:${event.location}` : '',
-          event.notes ? `DESCRIPTION:${event.notes.replace(/
-/g,'\n')}` : '',
+          event.notes ? `DESCRIPTION:${event.notes.replace(/\n/g,'\\n')}` : '',
           'END:VEVENT', 'END:VCALENDAR'
         ].filter(Boolean).join('\r\n');
         const blob = new Blob([ics], { type:'text/calendar' });
@@ -1867,6 +1868,7 @@
       };
 
       return (
+        <>
         <div style={{ minHeight:'100vh', background:'var(--bg)', paddingBottom:'100px' }}>
           <div style={{ maxWidth:'500px', margin:'0 auto', padding:'24px 20px 0' }}>
             {/* Header */}
@@ -2252,6 +2254,7 @@
             </div>
           </div>
         )}
+        </>
       );
     }
 
@@ -3023,19 +3026,12 @@
 
       useEffect(() => {
         if (!currentUser) return;
-        db.collection('events').where('hostId','==',currentUser.uid)
-          .orderBy('dateTime','desc').limit(20).get()
+        db.collection('events').orderBy('dateTime','desc').limit(50).get()
           .then(s => {
-            setGameHistory(s.docs.map(d=>({id:d.id,...d.data()})));
-          }).catch(() => {
-            // Fallback: fetch all and filter client-side (for events where user is player not host)
-            db.collection('events').orderBy('dateTime','desc').limit(50).get()
-              .then(s2 => {
-                const myGames = s2.docs.map(d=>({id:d.id,...d.data()}))
-                  .filter(g => (g.rsvps||[]).some(r => r.oderId === currentUser.uid && r.status==='going'));
-                setGameHistory(myGames);
-              }).catch(()=>{});
-          });
+            const myGames = s.docs.map(d=>({id:d.id,...d.data()}))
+              .filter(g => (g.rsvps||[]).some(r => r.oderId === currentUser.uid && r.status==='going'));
+            setGameHistory(myGames);
+          }).catch(()=>{});
       }, [currentUser]);
 
       const save = async () => {
