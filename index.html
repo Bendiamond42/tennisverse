@@ -68,7 +68,11 @@
     @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes slideUpFull { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }
     @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+    @keyframes pulseBig { 0%,100% { transform:scale(1); } 50% { transform:scale(1.06); } }
     @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes confettiFall { 0% { transform: translateY(0) rotate(0deg); opacity:1; } 100% { transform: translateY(100vh) rotate(720deg); opacity:0; } }
+    @keyframes popIn { 0% { transform:scale(0.4); opacity:0; } 70% { transform:scale(1.12); } 100% { transform:scale(1); opacity:1; } }
+    @keyframes kingPulse { 0%,100% { box-shadow:0 0 0 0 rgba(74,222,128,0); } 50% { box-shadow:0 0 0 6px rgba(74,222,128,0.15); } }
     .animate-in { animation: slideUp 0.25s ease-out; }
     .pac-container { 
       background: var(--surface) !important; 
@@ -2596,103 +2600,361 @@
 
     // ==================== LIVE GAME SCREEN ====================
     function LiveGameScreen({ event, onBack, players = [], format = 'kings' }) {
-      const { currentUser, userProfile } = useAuth();
-      const [scores, setScores] = useState({});
-      const [gameLog, setGameLog] = useState([]);
-      const [timer, setTimer] = useState(0);
-      const [running, setRunning] = useState(false);
-      const [winner, setWinner] = useState(null);
-      const timerRef = useRef(null);
+      const { currentUser } = useAuth();
 
-      const gamePlayers = event ? (event.rsvps||[]).filter(r=>r.status==='going').map(r => ({ oderId:r.oderId, name:r.firstName||r.userName, photoURL:r.photoURL })) : players;
+      // ── players list ──────────────────────────────────────────
+      const gamePlayers = React.useMemo(() => {
+        if (event) return (event.rsvps||[]).filter(r=>r.status==='going').map(r=>({ id:r.oderId, name:r.firstName||r.userName, photoURL:r.photoURL }));
+        return players.map(p => ({ id: p.oderId||p.id||p.name, name: p.firstName||p.name, photoURL: p.photoURL }));
+      }, []);
+
+      // ── core state ────────────────────────────────────────────
+      const [gameStats, setGameStats] = useState(() => {
+        const s = {};
+        gamePlayers.forEach(p => { s[p.id] = { timeMs:0, wins:0, winners:0 }; });
+        return s;
+      });
+      const [currentKings, setCurrentKings] = useState([]);   // array of 2 player IDs
+      const [selected, setSelected] = useState([]);           // pre-selection buffer
+      const [totalMs, setTotalMs] = useState(0);
+      const [isRunning, setIsRunning] = useState(false);
+      const [isPaused, setIsPaused] = useState(false);
+      const [phase, setPhase] = useState('game');             // 'game' | 'results'
+      const [winnerAnim, setWinnerAnim] = useState(null);     // player id
+      const [showConfetti, setShowConfetti] = useState(false);
+      const [savingResults, setSavingResults] = useState(false);
+
+      const intervalRef = useRef(null);
+      const winnerCooldown = useRef(false);
+      const wakeLockRef = useRef(null);
+
+      // ── wake lock ─────────────────────────────────────────────
+      const requestWakeLock = async () => { try { if ('wakeLock' in navigator) wakeLockRef.current = await navigator.wakeLock.request('screen'); } catch(e){} };
+      const releaseWakeLock = async () => { if (wakeLockRef.current) { try { await wakeLockRef.current.release(); } catch(e){} wakeLockRef.current = null; } };
 
       useEffect(() => {
-        if (running) { timerRef.current = setInterval(() => setTimer(t => t+1), 1000); }
-        else { clearInterval(timerRef.current); }
-        return () => clearInterval(timerRef.current);
-      }, [running]);
+        const onVisible = async () => { if (document.visibilityState==='visible' && isRunning && !isPaused) await requestWakeLock(); };
+        document.addEventListener('visibilitychange', onVisible);
+        return () => document.removeEventListener('visibilitychange', onVisible);
+      }, [isRunning, isPaused]);
 
-      const fmtTimer = (s) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
+      // ── timer tick ────────────────────────────────────────────
+      useEffect(() => {
+        if (isRunning && !isPaused && currentKings.length === 2) {
+          intervalRef.current = setInterval(() => {
+            setGameStats(prev => {
+              const n = {...prev};
+              currentKings.forEach(id => { if (n[id]) n[id] = {...n[id], timeMs: n[id].timeMs + 100}; });
+              return n;
+            });
+            setTotalMs(t => t + 100);
+          }, 100);
+        }
+        return () => clearInterval(intervalRef.current);
+      }, [isRunning, isPaused, currentKings]);
 
-      const addPoint = (playerId) => {
-        const newScores = { ...scores, [playerId]: (scores[playerId]||0)+1 };
-        setScores(newScores);
-        const player = gamePlayers.find(p => p.oderId === playerId);
-        setGameLog(l => [...l, { player:player?.name||'Unknown', time:timer, score:newScores[playerId] }]);
+      // ── helpers ───────────────────────────────────────────────
+      const fmtMs = (ms) => {
+        const s = Math.floor(ms/1000);
+        return `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
+      };
+      const fmtMsLong = (ms) => {
+        const s = Math.floor(ms/1000);
+        return `${Math.floor(s/60)}m ${(s%60)}s`;
       };
 
+      const getLeaderboard = () => Object.entries(gameStats).map(([id, s]) => {
+        const p = gamePlayers.find(x => x.id === id);
+        return { id, name: p?.name||id, photoURL: p?.photoURL, timeMs: s.timeMs, wins: s.wins, winners: s.winners, avg: s.wins > 0 ? s.timeMs/s.wins : 0 };
+      }).sort((a,b) => b.timeMs - a.timeMs);
+
+      // ── king selection ────────────────────────────────────────
+      const tapPlayer = (id) => {
+        if (!isRunning || isPaused) return;
+        // If already a king, ignore tap on card (winner btn handles it)
+        if (currentKings.includes(id)) return;
+
+        setSelected(prev => {
+          if (prev.includes(id)) return prev.filter(x => x !== id);
+          const next = [...prev, id];
+          if (next.length === 2) {
+            // commit kings
+            setCurrentKings(prevKings => {
+              setGameStats(s => {
+                const n = {...s};
+                next.forEach(kid => {
+                  if (!prevKings.includes(kid)) n[kid] = {...n[kid], wins: n[kid].wins + 1};
+                });
+                return n;
+              });
+              return next;
+            });
+            if (!isRunning) setIsRunning(true);
+            setTimeout(() => setSelected([]), 200);
+            return next; // briefly keep for visual, cleared by timeout
+          }
+          return next;
+        });
+      };
+
+      // ── winner button ─────────────────────────────────────────
+      const recordWinner = (id) => {
+        if (!currentKings.includes(id) || winnerCooldown.current) return;
+        winnerCooldown.current = true;
+        setGameStats(prev => ({
+          ...prev,
+          [id]: { ...prev[id], winners: prev[id].winners + 1, timeMs: prev[id].timeMs + 60000 }
+        }));
+        setWinnerAnim(id);
+        setTimeout(() => { setWinnerAnim(null); winnerCooldown.current = false; }, 1600);
+      };
+
+      // ── pause / resume ────────────────────────────────────────
+      const pauseGame = async () => { setIsPaused(true); clearInterval(intervalRef.current); await releaseWakeLock(); };
+      const resumeGame = async () => { setIsPaused(false); await requestWakeLock(); };
+
+      // ── end game ──────────────────────────────────────────────
       const endGame = async () => {
-        setRunning(false);
-        const sortedPlayers = gamePlayers.sort((a,b) => (scores[b.oderId]||0)-(scores[a.oderId]||0));
-        if (sortedPlayers[0]) setWinner(sortedPlayers[0]);
-        // Update stats
-        for (const p of sortedPlayers) {
-          const wins = p.oderId === sortedPlayers[0]?.oderId ? 1 : 0;
+        clearInterval(intervalRef.current);
+        setIsRunning(false); setIsPaused(false);
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 5000);
+        await releaseWakeLock();
+
+        // save stats to Firestore
+        setSavingResults(true);
+        const lb = getLeaderboard();
+        const topId = lb[0]?.id;
+        for (const p of gamePlayers) {
+          const s = gameStats[p.id] || {};
           try {
-            await db.collection('users').doc(p.oderId).update({
+            await db.collection('users').doc(p.id).update({
               'stats.gamesPlayed': firebase.firestore.FieldValue.increment(1),
-              'stats.totalWins': firebase.firestore.FieldValue.increment(wins),
-              'stats.totalPlayTime': firebase.firestore.FieldValue.increment(timer),
+              'stats.totalWins': firebase.firestore.FieldValue.increment(s.wins||0),
+              'stats.totalWinners': firebase.firestore.FieldValue.increment(s.winners||0),
+              'stats.totalPlayTime': firebase.firestore.FieldValue.increment(Math.floor((s.timeMs||0)/1000)),
             });
           } catch(e) {}
         }
         if (event?.id) {
-          await db.collection('events').doc(event.id).update({ isCompleted: true, completedAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(()=>{});
+          await db.collection('events').doc(event.id).update({ isCompleted:true, completedAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(()=>{});
         }
+        setSavingResults(false);
+        setPhase('results');
       };
 
+      // ── confetti pieces ───────────────────────────────────────
+      const confettiPieces = React.useMemo(() => Array.from({length:50}, (_,i) => ({
+        id:i, left:Math.random()*100, delay:Math.random()*2.5, dur:2+Math.random()*2,
+        color:['#4ade80','#22c55e','#fbbf24','#f87171','#60a5fa','#a78bfa','#fff'][i%7],
+        size: 7+Math.random()*7
+      })), []);
+
+      const lb = getLeaderboard();
+      const p1 = gamePlayers.find(p => p.id === currentKings[0]);
+      const p2 = gamePlayers.find(p => p.id === currentKings[1]);
+      const instrText = selected.length===0 ? 'Tap the 2 players who won' : selected.length===1 ? 'Tap 1 more winner' : 'Recording…';
+
+      // ──────────────────────────────────────────────────────────
+      // RESULTS SCREEN
+      // ──────────────────────────────────────────────────────────
+      if (phase === 'results') {
+        const champion = lb[0];
+        const rankEmoji = ['🥇','🥈','🥉'];
+        return (
+          <div style={{ minHeight:'100vh', background:'var(--bg)', paddingBottom:'80px', animation:'fadeIn 0.3s ease-out' }}>
+            {showConfetti && (
+              <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, pointerEvents:'none', zIndex:1000, overflow:'hidden' }}>
+                {confettiPieces.map(c => (
+                  <div key={c.id} style={{ position:'absolute', top:'-20px', left:`${c.left}%`, width:c.size, height:c.size, borderRadius:'2px', background:c.color, animation:`confettiFall ${c.dur}s ease-out ${c.delay}s forwards` }} />
+                ))}
+              </div>
+            )}
+            <div style={{ maxWidth:'500px', margin:'0 auto', padding:'32px 20px 24px' }}>
+              {/* Champion banner */}
+              <div style={{ textAlign:'center', marginBottom:'32px' }}>
+                <div style={{ fontSize:'64px', marginBottom:'12px', animation:'pulseBig 2s ease-in-out infinite', display:'block' }}>🏆</div>
+                <div style={{ fontSize:'11px', fontWeight:'700', letterSpacing:'0.14em', textTransform:'uppercase', color:'var(--text3)', marginBottom:'8px' }}>Champion</div>
+                <div style={{ fontSize:'28px', fontWeight:'900', letterSpacing:'-0.03em', color:'var(--accent)', marginBottom:'4px' }}>{champion?.name}</div>
+                <div style={{ fontSize:'13px', color:'var(--text2)' }}>dominated the court · {fmtMsLong(totalMs)} total</div>
+              </div>
+
+              {/* Leaderboard */}
+              <div style={{ display:'flex', flexDirection:'column', gap:'10px', marginBottom:'28px' }}>
+                {lb.map((player, i) => {
+                  const isFirst = i === 0;
+                  return (
+                    <div key={player.id} style={{ display:'flex', alignItems:'center', gap:'14px', padding:'16px 18px', background: isFirst ? 'rgba(74,222,128,0.08)' : 'var(--surface)', border:`1px solid ${isFirst?'rgba(74,222,128,0.25)':'var(--border)'}`, borderRadius:'var(--radius2)', animation:`slideUp 0.25s ease-out ${i*0.06}s both` }}>
+                      <div style={{ fontSize: isFirst?'24px':'18px', minWidth:'32px', textAlign:'center' }}>{rankEmoji[i] || `#${i+1}`}</div>
+                      <Avatar src={player.photoURL} name={player.name} size={38} />
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight:'700', fontSize:'15px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{player.name}</div>
+                        <div style={{ fontSize:'12px', color:'var(--text3)', marginTop:'1px' }}>{player.wins} wins{player.winners>0?` · 🔥${player.winners} winners`:''}</div>
+                      </div>
+                      <div style={{ textAlign:'right', flexShrink:0 }}>
+                        <div style={{ fontFamily:'DM Mono', fontSize:'16px', fontWeight:'500', color: isFirst?'var(--accent)':'var(--text)' }}>{fmtMs(player.timeMs)}</div>
+                        <div style={{ fontSize:'11px', color:'var(--text3)', marginTop:'1px' }}>avg {fmtMsLong(player.avg)}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <button onClick={onBack} style={{ width:'100%', padding:'16px', borderRadius:'var(--radius2)', background:'var(--accent)', border:'none', color:'#050a14', fontSize:'15px', fontWeight:'800', letterSpacing:'0.03em', cursor:'pointer' }}>
+                Done
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      // ──────────────────────────────────────────────────────────
+      // GAME SCREEN
+      // ──────────────────────────────────────────────────────────
       return (
         <div style={{ minHeight:'100vh', background:'var(--bg)', paddingBottom:'40px' }}>
-          <div style={{ maxWidth:'500px', margin:'0 auto', padding:'24px 20px' }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'28px' }}>
-              <Btn onClick={onBack} variant="ghost" size="sm"><I n="ArrowLeft" s={16} c="currentColor" /></Btn>
-              <div style={{ textAlign:'center' }}>
-                <div style={{ fontSize:'12px', color:'var(--text3)', fontWeight:'600', letterSpacing:'0.05em', textTransform:'uppercase' }}>Live Game</div>
-                <div style={{ fontFamily:'DM Mono', fontSize:'32px', fontWeight:'400', letterSpacing:'0.05em', color: running ? 'var(--accent)' : 'var(--text)' }}>{fmtTimer(timer)}</div>
+
+          {/* Winner flash overlay */}
+          {winnerAnim && (() => { const wp = gamePlayers.find(p=>p.id===winnerAnim); return (
+            <div style={{ position:'fixed', inset:0, background:'rgba(5,10,20,0.92)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', zIndex:200, animation:'fadeIn 0.15s ease-out' }}>
+              <div style={{ animation:'popIn 0.3s ease-out', textAlign:'center' }}>
+                <div style={{ fontSize:'88px', marginBottom:'12px', filter:'drop-shadow(0 0 32px rgba(251,191,36,0.7))' }}>🔥</div>
+                <div style={{ fontSize:'26px', fontWeight:'900', letterSpacing:'-0.02em', color:'var(--text)', marginBottom:'6px' }}>{wp?.name}</div>
+                <div style={{ fontFamily:'DM Mono', fontSize:'22px', color:'var(--accent)', fontWeight:'500' }}>+1:00</div>
               </div>
-              <Btn onClick={() => setRunning(r => !r)} variant={running ? 'secondary' : 'primary'} size="sm">{running ? 'Pause' : 'Start'}</Btn>
             </div>
+          ); })()}
 
-            {winner && (
-              <div style={{ textAlign:'center', padding:'28px', background:'var(--accent3)', border:'1px solid rgba(74,222,128,0.3)', borderRadius:'var(--radius)', marginBottom:'24px' }}>
-                <div style={{ fontSize:'36px', marginBottom:'8px' }}>🏆</div>
-                <div style={{ fontWeight:'800', fontSize:'20px', marginBottom:'4px' }}>{winner.name}</div>
-                <div style={{ color:'var(--text2)' }}>Wins with {scores[winner.oderId]||0} points!</div>
-              </div>
-            )}
-
-            <div style={{ marginBottom:'24px' }}>
-              {gamePlayers.map(p => (
-                <div key={p.oderId} style={{ display:'flex', alignItems:'center', gap:'14px', padding:'16px', background:'var(--surface)', borderRadius:'var(--radius2)', marginBottom:'8px', border: p.oderId===winner?.oderId ? '1px solid var(--accent)' : '1px solid var(--border)' }}>
-                  <Avatar src={p.photoURL} name={p.name} size={44} />
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontWeight:'700', fontSize:'15px' }}>{p.name}</div>
-                    <div style={{ fontSize:'13px', color:'var(--text2)' }}>Points: {scores[p.oderId]||0}</div>
-                  </div>
-                  <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
-                    <div style={{ fontFamily:'DM Mono', fontSize:'28px', fontWeight:'400', minWidth:'40px', textAlign:'center', color:'var(--accent)' }}>{scores[p.oderId]||0}</div>
-                    <Btn onClick={() => addPoint(p.oderId)} disabled={!!winner || !running} size="sm" icon="Plus">Point</Btn>
-                  </div>
+          {/* Pause modal */}
+          {isPaused && (
+            <div style={{ position:'fixed', inset:0, background:'rgba(5,10,20,0.94)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100, backdropFilter:'blur(12px)', padding:'20px' }}>
+              <div style={{ background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:'var(--radius)', padding:'24px', width:'100%', maxWidth:'400px', maxHeight:'85vh', overflowY:'auto' }}>
+                <div style={{ textAlign:'center', marginBottom:'20px' }}>
+                  <div style={{ fontSize:'36px', marginBottom:'8px' }}>⏸</div>
+                  <div style={{ fontSize:'18px', fontWeight:'800', letterSpacing:'0.05em' }}>PAUSED</div>
+                  <div style={{ fontSize:'12px', color:'var(--text3)', marginTop:'4px', fontFamily:'DM Mono' }}>{fmtMs(totalMs)} elapsed</div>
                 </div>
-              ))}
-            </div>
 
-            {!winner && <Btn onClick={endGame} variant="danger" size="lg">End Game</Btn>}
-            {winner && <Btn onClick={onBack} size="lg">Back to Home</Btn>}
-
-            {gameLog.length > 0 && (
-              <div style={{ marginTop:'24px' }}>
-                <div style={{ fontSize:'13px', fontWeight:'600', color:'var(--text2)', marginBottom:'10px', letterSpacing:'0.05em', textTransform:'uppercase' }}>Game Log</div>
-                <Card style={{ maxHeight:'200px', overflowY:'auto' }}>
-                  {[...gameLog].reverse().slice(0,15).map((entry, i) => (
-                    <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', padding:'6px 0', borderBottom:'1px solid var(--border)', color:'var(--text2)' }}>
-                      <span style={{ color:'var(--text)', fontWeight:'600' }}>{entry.player}</span>
-                      <span>+1 pt · {fmtTimer(entry.time)}</span>
+                {/* Mid-game standings */}
+                <div style={{ fontSize:'11px', fontWeight:'700', letterSpacing:'0.1em', textTransform:'uppercase', color:'var(--text3)', marginBottom:'10px' }}>Standings</div>
+                <div style={{ display:'flex', flexDirection:'column', gap:'8px', marginBottom:'20px' }}>
+                  {lb.map((player, i) => (
+                    <div key={player.id} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'12px 14px', background:'var(--bg2)', borderRadius:'var(--radius3)', border:'1px solid var(--border)' }}>
+                      <span style={{ fontSize:'14px', minWidth:'24px' }}>{ ['🥇','🥈','🥉'][i] || `#${i+1}` }</span>
+                      <Avatar src={player.photoURL} name={player.name} size={28} />
+                      <span style={{ flex:1, fontWeight:'600', fontSize:'14px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{player.name}</span>
+                      <span style={{ fontFamily:'DM Mono', fontSize:'13px', color:'var(--accent)' }}>{fmtMs(player.timeMs)}</span>
+                      <span style={{ fontSize:'12px', color:'var(--text3)' }}>{player.wins}W{player.winners>0?` 🔥${player.winners}`:''}</span>
                     </div>
                   ))}
-                </Card>
+                </div>
+
+                <button onClick={resumeGame} style={{ width:'100%', padding:'14px', borderRadius:'var(--radius2)', background:'var(--accent)', border:'none', color:'#050a14', fontSize:'15px', fontWeight:'800', cursor:'pointer', marginBottom:'10px', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' }}>
+                  ▶ Resume
+                </button>
+                <button onClick={endGame} style={{ width:'100%', padding:'14px', borderRadius:'var(--radius2)', background:'transparent', border:'1px solid rgba(248,113,113,0.35)', color:'var(--red)', fontSize:'14px', fontWeight:'700', cursor:'pointer' }}>
+                  End Game
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div style={{ maxWidth:'500px', margin:'0 auto', padding:'20px 16px' }}>
+
+            {/* Header row */}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'20px' }}>
+              <button onClick={onBack} style={{ width:'36px', height:'36px', borderRadius:'var(--radius3)', background:'var(--surface)', border:'1px solid var(--border)', color:'var(--text2)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <I n="ArrowLeft" s={16} c="currentColor" />
+              </button>
+              <div style={{ textAlign:'center' }}>
+                <div style={{ fontSize:'11px', fontWeight:'700', letterSpacing:'0.1em', textTransform:'uppercase', color:'var(--text3)', marginBottom:'2px' }}>King's Court</div>
+                <div style={{ fontFamily:'DM Mono', fontSize:'28px', color: isRunning&&!isPaused ? 'var(--accent)' : 'var(--text2)', letterSpacing:'0.05em' }}>{fmtMs(totalMs)}</div>
+              </div>
+              <button onClick={pauseGame} disabled={!isRunning} style={{ width:'36px', height:'36px', borderRadius:'var(--radius3)', background:'var(--surface)', border:'1px solid var(--border)', color: isRunning ? 'var(--amber)' : 'var(--text3)', cursor: isRunning?'pointer':'default', display:'flex', alignItems:'center', justifyContent:'center', opacity: isRunning?1:0.4 }}>
+                <I n="Pause" s={16} c="currentColor" />
+              </button>
+            </div>
+
+            {/* Current kings banner */}
+            {currentKings.length === 2 && (
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'10px', padding:'12px 16px', background:'rgba(74,222,128,0.07)', border:'1px solid rgba(74,222,128,0.18)', borderRadius:'var(--radius2)', marginBottom:'16px', animation:'kingPulse 2.5s ease-in-out infinite' }}>
+                <span style={{ fontSize:'13px' }}>👑</span>
+                <span style={{ fontWeight:'700', fontSize:'14px', color:'var(--accent)' }}>{p1?.name}</span>
+                <span style={{ fontSize:'12px', color:'var(--text3)' }}>&</span>
+                <span style={{ fontWeight:'700', fontSize:'14px', color:'var(--accent)' }}>{p2?.name}</span>
+                <span style={{ fontSize:'13px' }}>👑</span>
               </div>
             )}
+
+            {/* Instruction */}
+            <div style={{ textAlign:'center', fontSize:'12px', fontWeight:'600', color: selected.length===1?'var(--accent)':'var(--text3)', letterSpacing:'0.04em', marginBottom:'14px', textTransform:'uppercase' }}>
+              {!isRunning && currentKings.length === 0 ? 'Tap 2 winners to start' : instrText}
+            </div>
+
+            {/* Player grid */}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'10px', marginBottom:'20px' }}>
+              {gamePlayers.map(p => {
+                const s = gameStats[p.id] || { timeMs:0, wins:0, winners:0 };
+                const isKing = currentKings.includes(p.id);
+                const isSel = selected.includes(p.id);
+                return (
+                  <div key={p.id}
+                    onClick={() => tapPlayer(p.id)}
+                    style={{
+                      background: isKing ? 'rgba(74,222,128,0.08)' : isSel ? 'rgba(74,222,128,0.12)' : 'var(--surface)',
+                      border: `2px solid ${isKing?'rgba(74,222,128,0.4)':isSel?'rgba(74,222,128,0.5)':'var(--border)'}`,
+                      borderRadius:'var(--radius2)',
+                      padding:'14px 12px',
+                      cursor: isKing?'default':'pointer',
+                      transition:'border-color 0.15s, background 0.15s',
+                      animation: isKing ? 'kingPulse 2.5s ease-in-out infinite' : 'none',
+                      position:'relative', overflow:'hidden'
+                    }}>
+
+                    {/* Name row */}
+                    <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'10px' }}>
+                      <Avatar src={p.photoURL} name={p.name} size={30} />
+                      <div style={{ fontWeight:'700', fontSize:'13px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
+                        {isKing && <span style={{ marginRight:'4px' }}>👑</span>}{p.name}
+                      </div>
+                    </div>
+
+                    {/* Winner button — only for kings */}
+                    {isKing && (
+                      <button
+                        onClick={e => { e.stopPropagation(); recordWinner(p.id); }}
+                        style={{ width:'100%', padding:'7px', borderRadius:'var(--radius3)', border:'none', background:'linear-gradient(135deg,#f97316,#fbbf24)', color:'#0a0a0a', fontSize:'11px', fontWeight:'800', letterSpacing:'0.06em', cursor:'pointer', marginBottom:'10px', boxShadow:'0 3px 12px rgba(251,191,36,0.35)' }}>
+                        🔥 WINNER
+                      </button>
+                    )}
+
+                    {/* Stats */}
+                    <div style={{ display:'flex', gap:'10px' }}>
+                      <div>
+                        <div style={{ fontFamily:'DM Mono', fontSize:'15px', fontWeight:'500', color: isKing?'var(--accent)':'var(--text)' }}>{fmtMs(s.timeMs)}</div>
+                        <div style={{ fontSize:'9px', color:'var(--text3)', letterSpacing:'0.06em', textTransform:'uppercase', marginTop:'1px' }}>Time</div>
+                      </div>
+                      <div>
+                        <div style={{ fontFamily:'DM Mono', fontSize:'15px', fontWeight:'500' }}>{s.wins}</div>
+                        <div style={{ fontSize:'9px', color:'var(--text3)', letterSpacing:'0.06em', textTransform:'uppercase', marginTop:'1px' }}>Wins</div>
+                      </div>
+                      {s.winners > 0 && (
+                        <div>
+                          <div style={{ fontFamily:'DM Mono', fontSize:'15px', color:'var(--amber)' }}>🔥{s.winners}</div>
+                          <div style={{ fontSize:'9px', color:'var(--text3)', letterSpacing:'0.06em', textTransform:'uppercase', marginTop:'1px' }}>Fire</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* End game button */}
+            <button onClick={endGame} disabled={savingResults} style={{ width:'100%', padding:'14px', borderRadius:'var(--radius2)', background:'transparent', border:'1px solid rgba(248,113,113,0.3)', color:'var(--red)', fontSize:'14px', fontWeight:'700', cursor:'pointer', letterSpacing:'0.04em' }}>
+              {savingResults ? 'Saving…' : 'End Game'}
+            </button>
+
           </div>
         </div>
       );
