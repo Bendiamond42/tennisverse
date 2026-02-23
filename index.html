@@ -207,6 +207,8 @@
         Repeat: <><polyline points="17 1 21 5 17 9" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 11V9a4 4 0 014-4h14" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round"/><polyline points="7 23 3 19 7 15" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/><path d="M21 13v2a4 4 0 01-4 4H3" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
         Share: <><circle cx="18" cy="5" r="3" fill="none" stroke={c} strokeWidth="1.75"/><circle cx="6" cy="12" r="3" fill="none" stroke={c} strokeWidth="1.75"/><circle cx="18" cy="19" r="3" fill="none" stroke={c} strokeWidth="1.75"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" stroke={c} strokeWidth="1.75" strokeLinecap="round"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
         Pause: <><rect x="6" y="4" width="4" height="16" rx="1" fill={c}/><rect x="14" y="4" width="4" height="16" rx="1" fill={c}/></>,
+        UserPlus: <><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round"/><circle cx="8.5" cy="7" r="4" fill="none" stroke={c} strokeWidth="1.75"/><line x1="20" y1="8" x2="20" y2="14" stroke={c} strokeWidth="1.75" strokeLinecap="round"/><line x1="17" y1="11" x2="23" y2="11" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
+        Racket: <><ellipse cx="11" cy="9" rx="5" ry="6.5" fill="none" stroke={c} strokeWidth="1.75"/><line x1="11" y1="2.5" x2="11" y2="15.5" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><line x1="5.5" y1="9" x2="16.5" y2="9" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><line x1="6.5" y1="5.5" x2="15.5" y2="12.5" stroke={c} strokeWidth="1" strokeLinecap="round" opacity="0.5"/><line x1="15.5" y1="5.5" x2="6.5" y2="12.5" stroke={c} strokeWidth="1" strokeLinecap="round" opacity="0.5"/><line x1="11" y1="15.5" x2="9" y2="21" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
         Mail: <><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" fill="none" stroke={c} strokeWidth="1.75"/><polyline points="22,6 12,13 2,6" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
         Trophy: <><path d="M6 9H3V4h3M18 9h3V4h-3M6 4h12v7a6 6 0 01-12 0V4z" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/><line x1="12" y1="20" x2="12" y2="16" stroke={c} strokeWidth="1.75" strokeLinecap="round"/><line x1="8" y1="20" x2="16" y2="20" stroke={c} strokeWidth="1.75" strokeLinecap="round"/></>,
         Heart: <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" fill="none" stroke={c} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>,
@@ -2109,7 +2111,6 @@
 
     function CoachDetailModal({ coach, onClose, onReview }) {
       const cp = coach.coachProfile || {};
-      const [tab, setTab] = useState('profile');
 
       return (
         <Modal onClose={onClose} title={`${coach.firstName} ${coach.lastName}`}>
@@ -2154,12 +2155,243 @@
     }
 
     // ==================== PLAYERS SCREEN ====================
-    function PlayersScreen() {
+    // ==================== DIRECT MESSAGE MODAL ====================
+    function DirectMessageModal({ partner, onClose }) {
+      const { currentUser, userProfile } = useAuth();
+      const [messages, setMessages] = useState([]);
+      const [text, setText] = useState('');
+      const [sending, setSending] = useState(false);
+      const bottomRef = useRef(null);
+
+      // DM thread ID: sorted pair of UIDs
+      const threadId = [currentUser.uid, partner.oderId].sort().join('_');
+
+      useEffect(() => {
+        const unsub = db.collection('dms').doc(threadId).collection('messages')
+          .orderBy('createdAt', 'asc').limit(200)
+          .onSnapshot(s => {
+            setMessages(s.docs.map(d => ({ id:d.id, ...d.data() })));
+            setTimeout(() => bottomRef.current?.scrollIntoView({ behavior:'smooth' }), 50);
+          }, () => {});
+        return () => unsub();
+      }, [threadId]);
+
+      const send = async () => {
+        const t = text.trim();
+        if (!t || sending) return;
+        setSending(true); setText('');
+        await db.collection('dms').doc(threadId).collection('messages').add({
+          text: t,
+          senderId: currentUser.uid,
+          senderName: userProfile?.firstName || 'You',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        // Update thread index so we can list convos later
+        await db.collection('dms').doc(threadId).set({
+          participants: [currentUser.uid, partner.oderId],
+          lastMessage: t,
+          lastAt: firebase.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        setSending(false);
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior:'smooth' }), 80);
+      };
+
+      const fmtTime = (ts) => {
+        if (!ts) return '';
+        const d = ts.toDate ? ts.toDate() : new Date(ts);
+        return d.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+      };
+
+      return (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', display:'flex', alignItems:'flex-end', justifyContent:'center', zIndex:400, backdropFilter:'blur(6px)' }} onClick={onClose}>
+          <div style={{ background:'var(--bg2)', borderRadius:'24px 24px 0 0', width:'100%', maxWidth:'500px', height:'80vh', display:'flex', flexDirection:'column', animation:'slideUpFull 0.3s ease-out' }} onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ display:'flex', alignItems:'center', gap:'12px', padding:'18px 20px 14px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+              <Avatar src={partner.photoURL} name={`${partner.firstName} ${partner.lastName}`} size={36} />
+              <div style={{ flex:1 }}>
+                <div style={{ fontWeight:'700', fontSize:'15px' }}>{partner.firstName} {partner.lastName}</div>
+                <div style={{ fontSize:'11px', color:'var(--text3)' }}>Direct Message</div>
+              </div>
+              <button onClick={onClose} style={{ background:'var(--surface)', border:'none', borderRadius:'50%', width:'32px', height:'32px', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+                <I n="X" s={16} c="var(--text2)" />
+              </button>
+            </div>
+
+            {/* Messages */}
+            <div style={{ flex:1, overflowY:'auto', padding:'16px 20px', display:'flex', flexDirection:'column', gap:'10px' }}>
+              {messages.length === 0 && (
+                <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text3)', fontSize:'13px' }}>
+                  <div style={{ fontSize:'32px', marginBottom:'8px' }}>💬</div>
+                  Send {partner.firstName} a message
+                </div>
+              )}
+              {messages.map(m => {
+                const mine = m.senderId === currentUser.uid;
+                return (
+                  <div key={m.id} style={{ display:'flex', flexDirection:'column', alignItems: mine ? 'flex-end' : 'flex-start' }}>
+                    <div style={{ maxWidth:'75%', padding:'10px 14px', borderRadius: mine ? '16px 16px 4px 16px' : '16px 16px 16px 4px', background: mine ? 'var(--accent)' : 'var(--surface)', color: mine ? '#050a14' : 'var(--text)', fontSize:'14px', lineHeight:'1.45', fontWeight: mine ? '600' : '400' }}>
+                      {m.text}
+                    </div>
+                    <div style={{ fontSize:'10px', color:'var(--text3)', marginTop:'3px', paddingLeft:'4px', paddingRight:'4px' }}>{fmtTime(m.createdAt)}</div>
+                  </div>
+                );
+              })}
+              <div ref={bottomRef} />
+            </div>
+
+            {/* Input */}
+            <div style={{ padding:'12px 16px 28px', borderTop:'1px solid var(--border)', display:'flex', gap:'10px', flexShrink:0 }}>
+              <input
+                value={text} onChange={e => setText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
+                placeholder={`Message ${partner.firstName}...`}
+                style={{ flex:1, padding:'12px 16px', background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:'var(--radius2)', color:'var(--text)', fontSize:'14px', outline:'none' }}
+              />
+              <button onClick={send} disabled={!text.trim() || sending} style={{ width:'44px', height:'44px', borderRadius:'var(--radius2)', background: text.trim() ? 'var(--accent)' : 'var(--surface)', border:'none', display:'flex', alignItems:'center', justifyContent:'center', cursor: text.trim() ? 'pointer' : 'default', transition:'background 0.15s', flexShrink:0 }}>
+                <I n="Send" s={18} c={text.trim() ? '#050a14' : 'var(--text3)'} />
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ==================== PLAYER PROFILE MODAL ====================
+    function PlayerProfileModal({ player, onClose, onMessage, currentUser, userProfile, onFriendAction }) {
+      const isFriend = userProfile?.friends?.includes(player.oderId);
+      const isPending = userProfile?.sentRequests?.includes(player.oderId);
+      const hasRequest = userProfile?.friendRequests?.includes(player.oderId);
+      const isCoach = player.roles?.includes('coach');
+      const stats = player.stats || {};
+      const skillColors = { beginner:'#4ade80', intermediate:'#60a5fa', advanced:'#fbbf24', pro:'#f87171' };
+      const skillColor = skillColors[player.skillLevel] || '#4ade80';
+
+      const fmtPhone = (raw) => {
+        if (!raw) return null;
+        const digits = raw.replace(/\D/g,'');
+        if (digits.length === 10) return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+        if (digits.length === 11 && digits[0]==='1') return `+1 (${digits.slice(1,4)}) ${digits.slice(4,7)}-${digits.slice(7)}`;
+        return raw;
+      };
+
+      return (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', display:'flex', alignItems:'flex-end', justifyContent:'center', zIndex:400, backdropFilter:'blur(6px)' }} onClick={onClose}>
+          <div style={{ background:'var(--bg2)', borderRadius:'24px 24px 0 0', padding:'0 0 40px', width:'100%', maxWidth:'500px', maxHeight:'88vh', overflowY:'auto', animation:'slideUpFull 0.3s ease-out' }} onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div style={{ display:'flex', justifyContent:'flex-end', padding:'16px 16px 0' }}>
+              <button onClick={onClose} style={{ background:'var(--surface)', border:'none', borderRadius:'50%', width:'32px', height:'32px', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+                <I n="X" s={16} c="var(--text2)" />
+              </button>
+            </div>
+
+            {/* Avatar + name */}
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'8px 20px 24px', textAlign:'center' }}>
+              <div style={{ position:'relative', marginBottom:'14px' }}>
+                <Avatar src={player.photoURL} name={`${player.firstName} ${player.lastName}`} size={80} />
+                {isCoach && (
+                  <div style={{ position:'absolute', bottom:'-4px', right:'-4px', width:'26px', height:'26px', borderRadius:'50%', background:'#fbbf24', border:'3px solid var(--bg2)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <I n="Crown" s={12} c="#050a14" />
+                  </div>
+                )}
+              </div>
+              <h2 style={{ margin:'0 0 4px', fontSize:'22px', fontWeight:'800', letterSpacing:'-0.02em' }}>{player.firstName} {player.lastName}</h2>
+              <div style={{ display:'flex', gap:'6px', justifyContent:'center', flexWrap:'wrap', marginBottom:'4px' }}>
+                <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'4px 10px', background:'rgba(74,222,128,0.12)', border:'1px solid rgba(74,222,128,0.25)', borderRadius:'20px', fontSize:'11px', fontWeight:'700', color:'#4ade80' }}>
+                  <I n="Racket" s={11} c="#4ade80" /> Player
+                </span>
+                {isCoach && <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'4px 10px', background:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.25)', borderRadius:'20px', fontSize:'11px', fontWeight:'700', color:'#fbbf24' }}>
+                  <I n="Crown" s={11} c="#fbbf24" /> Coach
+                </span>}
+                {player.skillLevel && <span style={{ padding:'4px 10px', background:`${skillColor}18`, border:`1px solid ${skillColor}33`, borderRadius:'20px', fontSize:'11px', fontWeight:'700', color:skillColor, textTransform:'capitalize' }}>{player.skillLevel}</span>}
+              </div>
+              {player.location && <div style={{ fontSize:'13px', color:'var(--text3)', display:'flex', alignItems:'center', gap:'4px' }}><I n="MapPin" s={12} c="var(--text3)" />{player.location.split(',')[0]}</div>}
+            </div>
+
+            {/* Stats row */}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'8px', padding:'0 20px 20px' }}>
+              {[
+                { label:'Games', value:stats.gamesPlayed||0, color:'#4ade80' },
+                { label:'Wins', value:stats.totalWins||0, color:'#fbbf24' },
+                { label:'🔥 Winners', value:stats.totalWinners||0, color:'#f97316' },
+              ].map(s => (
+                <div key={s.label} style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius2)', padding:'14px 8px', textAlign:'center' }}>
+                  <div style={{ fontWeight:'900', fontSize:'22px', letterSpacing:'-0.03em', color:s.color }}>{s.value}</div>
+                  <div style={{ fontSize:'10px', color:'var(--text3)', fontWeight:'600', marginTop:'2px', textTransform:'uppercase', letterSpacing:'0.04em' }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Friend contact info — only visible to friends */}
+            {isFriend && (player.phone || player.email) && (
+              <div style={{ margin:'0 20px 20px', padding:'16px', background:'rgba(74,222,128,0.05)', border:'1px solid rgba(74,222,128,0.15)', borderRadius:'var(--radius2)' }}>
+                <div style={{ fontSize:'11px', fontWeight:'700', color:'var(--text3)', letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:'10px' }}>Contact Info</div>
+                {player.phone && (
+                  <a href={`tel:${player.phone}`} style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'8px', textDecoration:'none' }}>
+                    <div style={{ width:'32px', height:'32px', borderRadius:'8px', background:'rgba(96,165,250,0.12)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                      <I n="Phone" s={15} c="#60a5fa" />
+                    </div>
+                    <span style={{ fontSize:'14px', fontWeight:'600', color:'#60a5fa' }}>{fmtPhone(player.phone)}</span>
+                  </a>
+                )}
+                {player.email && (
+                  <a href={`mailto:${player.email}`} style={{ display:'flex', alignItems:'center', gap:'10px', textDecoration:'none' }}>
+                    <div style={{ width:'32px', height:'32px', borderRadius:'8px', background:'rgba(167,139,250,0.12)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                      <I n="Mail" s={15} c="#a78bfa" />
+                    </div>
+                    <span style={{ fontSize:'14px', fontWeight:'600', color:'#a78bfa' }}>{player.email}</span>
+                  </a>
+                )}
+              </div>
+            )}
+            {isFriend && !player.phone && !player.email && (
+              <div style={{ margin:'0 20px 20px', padding:'12px 14px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius2)', fontSize:'12px', color:'var(--text3)' }}>
+                {player.firstName} hasn't added contact info yet.
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div style={{ padding:'0 20px', display:'flex', flexDirection:'column', gap:'10px' }}>
+              {/* Message — always available */}
+              <button onClick={() => { onClose(); onMessage(player); }} style={{ width:'100%', padding:'14px', borderRadius:'var(--radius2)', background:'var(--surface)', border:'1px solid var(--border2)', color:'var(--text)', fontSize:'14px', fontWeight:'700', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' }}>
+                <I n="MessageCircle" s={17} c="var(--accent)" /> Message {player.firstName}
+              </button>
+
+              {/* Friend actions */}
+              {isFriend && (
+                <div style={{ textAlign:'center', fontSize:'12px', color:'var(--accent)', fontWeight:'600', padding:'4px 0' }}>
+                  ✓ Friends
+                </div>
+              )}
+              {isPending && (
+                <div style={{ textAlign:'center', fontSize:'12px', color:'var(--amber)', fontWeight:'600', padding:'4px 0' }}>
+                  Friend request sent
+                </div>
+              )}
+              {hasRequest && (
+                <button onClick={() => onFriendAction('accept', player)} style={{ width:'100%', padding:'14px', borderRadius:'var(--radius2)', background:'var(--accent)', border:'none', color:'#050a14', fontSize:'14px', fontWeight:'800', cursor:'pointer' }}>
+                  Accept Friend Request
+                </button>
+              )}
+              {!isFriend && !isPending && !hasRequest && (
+                <button onClick={() => onFriendAction('add', player)} style={{ width:'100%', padding:'14px', borderRadius:'var(--radius2)', background:'transparent', border:'1px solid rgba(74,222,128,0.3)', color:'var(--accent)', fontSize:'14px', fontWeight:'700', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' }}>
+                  <I n="UserPlus" s={17} c="var(--accent)" /> Add Friend
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+        function PlayersScreen() {
       const { currentUser, userProfile, refreshProfile } = useAuth();
       const [allPlayers, setAllPlayers] = useState([]);
       const [loading, setLoading] = useState(true);
       const [search, setSearch] = useState('');
       const [tab, setTab] = useState('all');
+      const [viewingPlayer, setViewingPlayer] = useState(null);
+      const [messagingPlayer, setMessagingPlayer] = useState(null);
 
       useEffect(() => {
         db.collection('users').limit(100).get().then(s => {
@@ -2189,6 +2421,12 @@
         refreshProfile();
       };
 
+      const handleFriendAction = async (action, p) => {
+        if (action === 'add') await sendRequest(p);
+        if (action === 'accept') await acceptRequest(p);
+        setViewingPlayer(prev => prev ? { ...prev } : null); // refresh modal state
+      };
+
       const getStatus = (p) => {
         if (userProfile?.friends?.includes(p.oderId)) return 'friend';
         if (userProfile?.sentRequests?.includes(p.oderId)) return 'pending';
@@ -2213,7 +2451,7 @@
                 const isCoach = p.roles?.includes('coach');
                 const stats = p.stats || {};
                 return (
-                  <Card key={p.oderId} style={{ display:'flex', alignItems:'center', gap:'14px' }}>
+                  <Card key={p.oderId} onClick={() => setViewingPlayer(p)} style={{ display:'flex', alignItems:'center', gap:'14px', cursor:'pointer' }}>
                     <Avatar src={p.photoURL} name={`${p.firstName} ${p.lastName}`} size={48} />
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'2px' }}>
@@ -2226,20 +2464,41 @@
                         {stats.gamesPlayed > 0 && <span>{stats.gamesPlayed} games</span>}
                       </div>
                     </div>
-                    <div style={{ flexShrink:0 }}>
+                    <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:'8px' }}>
+                      {/* Message bubble icon */}
+                      <button onClick={e => { e.stopPropagation(); setMessagingPlayer(p); }} style={{ width:'32px', height:'32px', borderRadius:'50%', background:'var(--surface2)', border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0 }}>
+                        <I n="MessageCircle" s={15} c="var(--accent)" />
+                      </button>
                       {status === 'friend' && <Badge color="green">Friends</Badge>}
                       {status === 'pending' && <Badge color="amber">Pending</Badge>}
                       {status === 'request' && <div style={{ display:'flex', gap:'6px' }}>
-                        <Btn onClick={() => acceptRequest(p)} size="sm">Accept</Btn>
-                        <Btn onClick={() => declineRequest(p)} variant="ghost" size="sm"><I n="X" s={14} c="currentColor" /></Btn>
+                        <Btn onClick={e => { e.stopPropagation(); acceptRequest(p); }} size="sm">Accept</Btn>
+                        <Btn onClick={e => { e.stopPropagation(); declineRequest(p); }} variant="ghost" size="sm"><I n="X" s={14} c="currentColor" /></Btn>
                       </div>}
-                      {status === 'none' && <Btn onClick={() => sendRequest(p)} variant="outline" size="sm">Add</Btn>}
+                      {status === 'none' && <Btn onClick={e => { e.stopPropagation(); sendRequest(p); }} variant="outline" size="sm">Add</Btn>}
                     </div>
                   </Card>
                 );
               })
             }
           </div>
+
+          {viewingPlayer && (
+            <PlayerProfileModal
+              player={viewingPlayer}
+              onClose={() => setViewingPlayer(null)}
+              onMessage={p => setMessagingPlayer(p)}
+              currentUser={currentUser}
+              userProfile={userProfile}
+              onFriendAction={handleFriendAction}
+            />
+          )}
+          {messagingPlayer && (
+            <DirectMessageModal
+              partner={messagingPlayer}
+              onClose={() => setMessagingPlayer(null)}
+            />
+          )}
         </div>
       );
     }
@@ -2250,7 +2509,6 @@
       const [editing, setEditing] = useState(false);
       const [form, setForm] = useState({ firstName:'', lastName:'', phone:'', location:'', skillLevel:'intermediate' });
       const [saving, setSaving] = useState(false);
-      const [tab, setTab] = useState('profile');
       const [gameHistory, setGameHistory] = useState([]);
       const [showCoachEditor, setShowCoachEditor] = useState(false);
 
@@ -2369,7 +2627,7 @@
                 <div style={{ fontSize:'13px', color:'var(--text2)', marginBottom:'10px' }}>{currentUser?.email}</div>
                 <div style={{ display:'flex', gap:'6px', justifyContent:'center', flexWrap:'wrap' }}>
                   <span style={{ display:'inline-flex', alignItems:'center', gap:'5px', padding:'5px 12px', background:'rgba(74,222,128,0.12)', border:'1px solid rgba(74,222,128,0.25)', borderRadius:'20px', fontSize:'12px', fontWeight:'700', color:'#4ade80' }}>
-                    <I n="Activity" s={11} c="#4ade80" /> Player
+                    <I n="Racket" s={13} c="#4ade80" /> Player
                   </span>
                   {isCoach && (
                     <span style={{ display:'inline-flex', alignItems:'center', gap:'5px', padding:'5px 12px', background:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.25)', borderRadius:'20px', fontSize:'12px', fontWeight:'700', color:'#fbbf24' }}>
@@ -2399,15 +2657,13 @@
               ))}
             </div>
 
-            {/* ── TABS ── */}
-            <Tabs tabs={[{key:'profile',label:'Profile'},{key:'roles',label:'Role'},{key:'history',label:'History'}]} active={tab} onChange={setTab} />
-
-            {/* ── PROFILE TAB ── */}
-            {tab === 'profile' && <div className="animate-in">
+            {/* ── PROFILE SECTION ── */}
+            <div style={{ marginBottom:'24px' }}>
+              <div style={{ fontSize:'11px', fontWeight:'700', color:'var(--text3)', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:'12px' }}>Profile</div>
               {!editing ? (
                 <Card>
                   <InfoRow icon="MapPin" label="Location" value={userProfile?.location || null} accent="#4ade80" />
-                  <InfoRow icon="Activity" label="Skill Level" value={form.skillLevel ? form.skillLevel.charAt(0).toUpperCase()+form.skillLevel.slice(1) : null} accent={skillColor} />
+                  <InfoRow icon="Racket" label="Skill Level" value={form.skillLevel ? form.skillLevel.charAt(0).toUpperCase()+form.skillLevel.slice(1) : null} accent={skillColor} />
                   <InfoRow icon="Phone" label="Phone" value={fmtPhone(userProfile?.phone)} accent="#60a5fa" />
                   <InfoRow icon="Mail" label="Email" value={currentUser?.email} accent="#a78bfa" />
                   {!userProfile?.location && !userProfile?.phone && (
@@ -2441,53 +2697,55 @@
                   </div>
                 </Card>
               )}
-            </div>}
+            </div>
 
-            {/* ── ROLE TAB ── */}
-            {tab === 'roles' && <div className="animate-in">
-              {/* Player role — always on, can't be removed */}
-              <div style={{ display:'flex', alignItems:'center', gap:'14px', padding:'18px', background:'rgba(74,222,128,0.06)', border:'1px solid rgba(74,222,128,0.2)', borderRadius:'var(--radius2)', marginBottom:'10px' }}>
-                <div style={{ width:'46px', height:'46px', borderRadius:'14px', background:'rgba(74,222,128,0.12)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                  <I n="Activity" s={22} c="#4ade80" />
-                </div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:'700', fontSize:'15px' }}>Player</div>
-                  <div style={{ fontSize:'12px', color:'var(--text2)', marginTop:'2px' }}>Join and host games on the platform</div>
-                </div>
-                <div style={{ width:'24px', height:'24px', borderRadius:'50%', background:'#4ade80', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                  <I n="Check" s={13} c="#050a14" />
-                </div>
-              </div>
+            {/* ── COACH SECTION ── */}
+            <div style={{ marginBottom:'24px' }}>
+              <div style={{ fontSize:'11px', fontWeight:'700', color:'var(--text3)', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:'12px' }}>Coach</div>
 
-              {/* Coach role — toggleable */}
-              <div onClick={toggleCoach} style={{ display:'flex', alignItems:'center', gap:'14px', padding:'18px', background: isCoach ? 'rgba(251,191,36,0.06)' : 'var(--surface)', border:`1px solid ${isCoach?'rgba(251,191,36,0.25)':'rgba(255,255,255,0.07)'}`, borderRadius:'var(--radius2)', marginBottom:'10px', cursor:'pointer', transition:'all 0.2s' }}>
+              {/* Toggle row */}
+              <div onClick={toggleCoach} style={{ display:'flex', alignItems:'center', gap:'14px', padding:'18px', background: isCoach ? 'rgba(251,191,36,0.06)' : 'var(--surface)', border:`1px solid ${isCoach?'rgba(251,191,36,0.3)':'rgba(255,255,255,0.07)'}`, borderRadius: isCoach ? 'var(--radius2) var(--radius2) 0 0' : 'var(--radius2)', cursor:'pointer', transition:'all 0.2s' }}>
                 <div style={{ width:'46px', height:'46px', borderRadius:'14px', background: isCoach ? 'rgba(251,191,36,0.12)' : '#1a2538', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'background 0.2s' }}>
                   <I n="Crown" s={22} c={isCoach?'#fbbf24':'#4a5878'} />
                 </div>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:'700', fontSize:'15px' }}>Coach</div>
-                  <div style={{ fontSize:'12px', color:'var(--text2)', marginTop:'2px' }}>Offer coaching sessions & appear in coach listings</div>
+                  <div style={{ fontWeight:'700', fontSize:'15px' }}>Offer Coaching</div>
+                  <div style={{ fontSize:'12px', color:'var(--text2)', marginTop:'2px' }}>Appear in coach listings & get hired for sessions</div>
                 </div>
-                <div style={{ width:'24px', height:'24px', borderRadius:'50%', background: isCoach ? '#fbbf24' : '#1a2538', border:`1px solid ${isCoach?'#fbbf24':'rgba(255,255,255,0.12)'}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all 0.2s' }}>
-                  {isCoach && <I n="Check" s={13} c="#050a14" />}
+                {/* Toggle pill */}
+                <div style={{ width:'44px', height:'26px', borderRadius:'13px', background: isCoach ? '#fbbf24' : '#1a2538', border:`1px solid ${isCoach?'#fbbf24':'rgba(255,255,255,0.15)'}`, position:'relative', transition:'all 0.2s', flexShrink:0 }}>
+                  <div style={{ position:'absolute', top:'3px', left: isCoach ? '21px' : '3px', width:'18px', height:'18px', borderRadius:'50%', background: isCoach ? '#050a14' : '#4a5878', transition:'left 0.2s' }} />
                 </div>
               </div>
 
+              {/* Coach details — shown when enabled */}
               {isCoach && (
-                <div style={{ marginTop:'4px' }}>
-                  <button onClick={() => setShowCoachEditor(true)} style={{ width:'100%', padding:'13px', borderRadius:'var(--radius2)', background:'rgba(251,191,36,0.08)', border:'1px solid rgba(251,191,36,0.2)', color:'#fbbf24', fontSize:'14px', fontWeight:'700', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' }}>
-                    <I n="Edit" s={15} c="#fbbf24" /> Edit Coach Profile
+                <div style={{ background:'rgba(251,191,36,0.04)', border:'1px solid rgba(251,191,36,0.2)', borderTop:'none', borderRadius:'0 0 var(--radius2) var(--radius2)', padding:'16px 18px' }}>
+                  {userProfile?.coachProfile?.title ? (
+                    <div style={{ marginBottom:'12px' }}>
+                      <div style={{ fontWeight:'700', fontSize:'14px', color:'#fbbf24', marginBottom:'2px' }}>{userProfile.coachProfile.title}</div>
+                      {userProfile.coachProfile.rate && <div style={{ fontSize:'13px', color:'var(--text2)' }}>${userProfile.coachProfile.rate}/hr</div>}
+                      {userProfile.coachProfile.bio && <div style={{ fontSize:'13px', color:'var(--text2)', marginTop:'6px', lineHeight:'1.5' }}>{userProfile.coachProfile.bio}</div>}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize:'13px', color:'var(--text3)', marginBottom:'12px' }}>Complete your coach profile so players can find and hire you.</div>
+                  )}
+                  <button onClick={() => setShowCoachEditor(true)} style={{ width:'100%', padding:'11px', borderRadius:'var(--radius2)', background:'rgba(251,191,36,0.1)', border:'1px solid rgba(251,191,36,0.25)', color:'#fbbf24', fontSize:'13px', fontWeight:'700', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' }}>
+                    <I n="Edit" s={14} c="#fbbf24" /> {userProfile?.coachProfile?.title ? 'Edit Coach Profile' : 'Set Up Coach Profile'}
                   </button>
                 </div>
               )}
 
-              <div style={{ marginTop:'16px', padding:'14px 16px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius2)', fontSize:'13px', color:'var(--text3)', lineHeight:'1.5' }}>
-                💡 Players can always join and host games. Enabling the Coach role lets you appear in coach search results and get hired for sessions.
-              </div>
-            </div>}
+              {!isCoach && (
+                <div style={{ marginTop:'10px', padding:'12px 14px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius2)', fontSize:'12px', color:'var(--text3)', lineHeight:'1.5' }}>
+                  💡 Enabling Coach lets you appear in coach search results and get hired for sessions.
+                </div>
+              )}
+            </div>
 
-            {/* ── HISTORY TAB ── */}
-            {tab === 'history' && <div className="animate-in">
+            {/* ── GAME HISTORY SECTION ── */}
+            <div style={{ marginBottom:'24px' }}>
+              <div style={{ fontSize:'11px', fontWeight:'700', color:'var(--text3)', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:'12px' }}>Game History</div>
               {gameHistory.length === 0
                 ? <Empty icon="Calendar" title="No games yet" sub="Games you join or host will appear here" />
                 : gameHistory.map(g => {
@@ -2509,7 +2767,7 @@
                   );
                 })
               }
-            </div>}
+            </div>
           </div>
           {showCoachEditor && <CoachProfileEditor onClose={() => setShowCoachEditor(false)} />}
         </div>
@@ -2837,6 +3095,7 @@
       })), []);
 
       const lb = getLeaderboard();
+      const anyWinnerThisRound = currentKings.some(id => winnersThisRound[id]);
       const p1 = gamePlayers.find(p => p.id === currentKings[0]);
       const p2 = gamePlayers.find(p => p.id === currentKings[1]);
       const instrText = selected.length===0 ? (currentKings.length===0 ? 'Tap 2 players to start' : 'Tap the 2 players who won') : selected.length===1 ? 'Tap 1 more' : 'Recording…';
@@ -3028,14 +3287,14 @@
                     </div>
 
                     {/* Winner button — only for kings, 1 per round per player */}
-                    {isKing && !winnersThisRound[p.id] && (
+                    {isKing && !anyWinnerThisRound && (
                       <button
                         onClick={e => { e.stopPropagation(); recordWinner(p.id); }}
                         style={{ width:'100%', padding:'7px', borderRadius:'var(--radius3)', border:'none', background:'linear-gradient(135deg,#f97316,#fbbf24)', color:'#0a0a0a', fontSize:'11px', fontWeight:'800', letterSpacing:'0.06em', cursor:'pointer', marginBottom:'10px', boxShadow:'0 3px 12px rgba(251,191,36,0.35)' }}>
                         🔥 WINNER
                       </button>
                     )}
-                    {isKing && winnersThisRound[p.id] && (
+                    {isKing && anyWinnerThisRound && (
                       <div style={{ width:'100%', padding:'7px', borderRadius:'var(--radius3)', background:'rgba(251,191,36,0.08)', border:'1px solid rgba(251,191,36,0.2)', color:'var(--amber)', fontSize:'11px', fontWeight:'700', letterSpacing:'0.04em', marginBottom:'10px', textAlign:'center' }}>
                         🔥 Recorded
                       </div>
