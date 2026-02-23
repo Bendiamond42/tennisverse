@@ -771,7 +771,9 @@
                 <div style={{ fontSize:'13px', color:'var(--text2)', marginBottom:'4px' }}>{greeting()},</div>
                 <h1 style={{ margin:0, fontSize:'24px', fontWeight:'800', letterSpacing:'-0.03em' }}>{userProfile?.firstName || 'Player'} 👋</h1>
               </div>
-              <Avatar src={userProfile?.photoURL} name={`${userProfile?.firstName} ${userProfile?.lastName}`} size={44} />
+              <div onClick={() => setScreen('profile')} style={{ cursor:'pointer', borderRadius:'50%', transition:'opacity 0.15s' }} onMouseEnter={e=>e.currentTarget.style.opacity='0.8'} onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
+                <Avatar src={userProfile?.photoURL} name={`${userProfile?.firstName} ${userProfile?.lastName}`} size={44} />
+              </div>
             </div>
 
             {/* Quick Stats */}
@@ -1214,18 +1216,12 @@
               {/* Date button → opens inline calendar */}
               <div onClick={() => setShowDatePicker(true)} style={{ flex:'1 1 55%', display:'flex', alignItems:'center', gap:'10px', padding:'13px 16px', background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:'var(--radius2)', cursor:'pointer' }}>
                 <I n="Calendar" s={17} c="var(--accent)" />
-                <div>
-                  <div style={{ fontSize:'11px', color:'var(--text3)', fontWeight:'600', letterSpacing:'0.05em', textTransform:'uppercase', marginBottom:'1px' }}>Date</div>
-                  <div style={{ fontSize:'14px', fontWeight:'700' }}>{fmtDate(form.date)}</div>
-                </div>
+                <span style={{ fontSize:'14px', fontWeight:'700' }}>{fmtDate(form.date)}</span>
               </div>
               {/* Time button → opens time picker */}
               <div onClick={() => setShowTimePicker(true)} style={{ flex:'1 1 45%', display:'flex', alignItems:'center', gap:'10px', padding:'13px 16px', background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:'var(--radius2)', cursor:'pointer' }}>
                 <I n="Clock" s={17} c="var(--accent)" />
-                <div>
-                  <div style={{ fontSize:'11px', color:'var(--text3)', fontWeight:'600', letterSpacing:'0.05em', textTransform:'uppercase', marginBottom:'1px' }}>Time</div>
-                  <div style={{ fontSize:'14px', fontWeight:'700' }}>{fmtTime()}</div>
-                </div>
+                <span style={{ fontSize:'14px', fontWeight:'700' }}>{fmtTime()}</span>
               </div>
             </div>
 
@@ -1524,15 +1520,7 @@
               <button onClick={() => onConfirm(selHour, selMinute, selAmpm)} style={{ background:'var(--accent)', border:'none', borderRadius:'10px', padding:'8px 16px', color:'#050a14', fontSize:'14px', fontWeight:'700', cursor:'pointer' }}>Done</button>
             </div>
 
-            <div style={{ padding:'24px 20px 40px' }}>
-              {/* Quick time presets */}
-              <div style={{ display:'flex', gap:'6px', marginBottom:'24px', flexWrap:'wrap' }}>
-                {[{l:'6 AM',h:6,m:0,a:'AM'},{l:'7 AM',h:7,m:0,a:'AM'},{l:'8 AM',h:8,m:0,a:'AM'},{l:'9 AM',h:9,m:0,a:'AM'},{l:'10 AM',h:10,m:0,a:'AM'},{l:'12 PM',h:12,m:0,a:'PM'},{l:'2 PM',h:2,m:0,a:'PM'},{l:'4 PM',h:4,m:0,a:'PM'},{l:'5 PM',h:5,m:0,a:'PM'},{l:'6 PM',h:6,m:0,a:'PM'},{l:'7 PM',h:7,m:0,a:'PM'},{l:'8 PM',h:8,m:0,a:'PM'},{l:'9 PM',h:9,m:0,a:'PM'}].map(t => {
-                  const active = selHour===t.h&&selMinute===t.m&&selAmpm===t.a;
-                  return <button key={t.l} onClick={() => { setSelHour(t.h); setSelMinute(t.m); setSelAmpm(t.a); }} style={{ padding:'6px 13px', borderRadius:'20px', border:`1px solid ${active?'var(--accent)':'var(--border)'}`, background:active?'var(--accent3)':'var(--surface)', color:active?'var(--accent)':'var(--text2)', fontSize:'12px', fontWeight:'600', cursor:'pointer', whiteSpace:'nowrap' }}>{t.l}</button>;
-                })}
-              </div>
-
+            <div style={{ padding:'28px 24px 40px' }}>
               {/* Drum roller: Hour : Min AM/PM */}
               <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', padding:'20px 16px', background:'var(--surface)', borderRadius:'var(--radius)', border:'1px solid var(--border)' }}>
                 {/* Hour */}
@@ -1559,13 +1547,6 @@
                     <button key={p} onClick={() => setSelAmpm(p)} style={{ width:'56px', padding:'14px 8px', borderRadius:'var(--radius2)', background:selAmpm===p?'var(--accent)':'var(--surface2)', border:`1px solid ${selAmpm===p?'var(--accent)':'var(--border)'}`, color:selAmpm===p?'#050a14':'var(--text2)', fontSize:'14px', fontWeight:'800', cursor:'pointer', transition:'all 0.15s' }}>{p}</button>
                   ))}
                 </div>
-              </div>
-
-              {/* Minute quick-select */}
-              <div style={{ display:'flex', gap:'8px', marginTop:'12px', justifyContent:'center' }}>
-                {[0,15,30,45].map(m => (
-                  <button key={m} onClick={() => setSelMinute(m)} style={{ flex:1, padding:'10px', borderRadius:'var(--radius3)', border:`1px solid ${selMinute===m?'var(--accent)':'var(--border)'}`, background:selMinute===m?'var(--accent3)':'var(--surface)', color:selMinute===m?'var(--accent)':'var(--text2)', fontSize:'14px', fontWeight:'700', cursor:'pointer', fontFamily:"'DM Mono',monospace" }}>:{String(m).padStart(2,'0')}</button>
-                ))}
               </div>
             </div>
           </div>
@@ -2238,39 +2219,61 @@
       const [messages, setMessages] = useState([]);
       const [text, setText] = useState('');
       const [sending, setSending] = useState(false);
+      const [sendError, setSendError] = useState('');
       const bottomRef = useRef(null);
+      const inputRef = useRef(null);
 
-      // DM thread ID: sorted pair of UIDs
+      // DM thread ID: sorted pair of UIDs joined by underscore
       const threadId = [currentUser.uid, partner.oderId].sort().join('_');
 
       useEffect(() => {
+        // Listen for messages — no orderBy to avoid needing a composite index
         const unsub = db.collection('dms').doc(threadId).collection('messages')
-          .orderBy('createdAt', 'asc').limit(200)
+          .limit(200)
           .onSnapshot(s => {
-            setMessages(s.docs.map(d => ({ id:d.id, ...d.data() })));
+            const msgs = s.docs
+              .map(d => ({ id:d.id, ...d.data() }))
+              .sort((a, b) => {
+                const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt || 0);
+                const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt || 0);
+                return aTime - bTime;
+              });
+            setMessages(msgs);
             setTimeout(() => bottomRef.current?.scrollIntoView({ behavior:'smooth' }), 50);
-          }, () => {});
+          }, (err) => { console.error('DM listen error:', err); });
         return () => unsub();
       }, [threadId]);
 
       const send = async () => {
         const t = text.trim();
         if (!t || sending) return;
-        setSending(true); setText('');
-        await db.collection('dms').doc(threadId).collection('messages').add({
-          text: t,
-          senderId: currentUser.uid,
-          senderName: userProfile?.firstName || 'You',
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        });
-        // Update thread index so we can list convos later
-        await db.collection('dms').doc(threadId).set({
-          participants: [currentUser.uid, partner.oderId],
-          lastMessage: t,
-          lastAt: firebase.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
-        setSending(false);
-        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior:'smooth' }), 80);
+        setSending(true);
+        setSendError('');
+        const savedText = t;
+        setText('');
+        inputRef.current?.focus();
+        try {
+          // Upsert the thread doc first so subcollection write always has a parent
+          await db.collection('dms').doc(threadId).set({
+            participants: [currentUser.uid, partner.oderId],
+            lastMessage: savedText,
+            lastAt: firebase.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+          // Then add the message
+          await db.collection('dms').doc(threadId).collection('messages').add({
+            text: savedText,
+            senderId: currentUser.uid,
+            senderName: `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'You',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+          setTimeout(() => bottomRef.current?.scrollIntoView({ behavior:'smooth' }), 80);
+        } catch(err) {
+          console.error('DM send error:', err);
+          setText(savedText); // restore text so user doesn't lose their message
+          setSendError('Failed to send. Check your connection.');
+        } finally {
+          setSending(false);
+        }
       };
 
       const fmtTime = (ts) => {
@@ -2317,16 +2320,25 @@
             </div>
 
             {/* Input */}
-            <div style={{ padding:'12px 16px 28px', borderTop:'1px solid var(--border)', display:'flex', gap:'10px', flexShrink:0 }}>
-              <input
-                value={text} onChange={e => setText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
-                placeholder={`Message ${partner.firstName}...`}
-                style={{ flex:1, padding:'12px 16px', background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:'var(--radius2)', color:'var(--text)', fontSize:'14px', outline:'none' }}
-              />
-              <button onClick={send} disabled={!text.trim() || sending} style={{ width:'44px', height:'44px', borderRadius:'var(--radius2)', background: text.trim() ? 'var(--accent)' : 'var(--surface)', border:'none', display:'flex', alignItems:'center', justifyContent:'center', cursor: text.trim() ? 'pointer' : 'default', transition:'background 0.15s', flexShrink:0 }}>
-                <I n="Send" s={18} c={text.trim() ? '#050a14' : 'var(--text3)'} />
-              </button>
+            <div style={{ padding:'8px 16px 28px', borderTop:'1px solid var(--border)', flexShrink:0 }}>
+              {sendError && (
+                <div style={{ fontSize:'12px', color:'var(--red)', padding:'6px 4px 6px', textAlign:'center' }}>{sendError}</div>
+              )}
+              <div style={{ display:'flex', gap:'10px' }}>
+                <input
+                  ref={inputRef}
+                  value={text} onChange={e => { setText(e.target.value); setSendError(''); }}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
+                  placeholder={`Message ${partner.firstName}...`}
+                  autoFocus
+                  style={{ flex:1, padding:'12px 16px', background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:'var(--radius2)', color:'var(--text)', fontSize:'14px', outline:'none' }}
+                />
+                <button onClick={send} disabled={!text.trim() || sending} style={{ width:'44px', height:'44px', borderRadius:'var(--radius2)', background: text.trim() && !sending ? 'var(--accent)' : 'var(--surface)', border:'none', display:'flex', alignItems:'center', justifyContent:'center', cursor: text.trim() && !sending ? 'pointer' : 'default', transition:'background 0.15s', flexShrink:0 }}>
+                  {sending
+                    ? <div style={{ width:'16px', height:'16px', borderRadius:'50%', border:'2px solid var(--text3)', borderTopColor:'var(--accent)', animation:'spin 0.6s linear infinite' }} />
+                    : <I n="Send" s={18} c={text.trim() ? '#050a14' : 'var(--text3)'} />}
+                </button>
+              </div>
             </div>
           </div>
         </div>
