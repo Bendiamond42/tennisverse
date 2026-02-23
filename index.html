@@ -2670,31 +2670,37 @@
 
       // ── king selection ────────────────────────────────────────
       const tapPlayer = (id) => {
-        if (!isRunning || isPaused) return;
+        if (isPaused) return;
         // If already a king, ignore tap on card (winner btn handles it)
         if (currentKings.includes(id)) return;
 
-        setSelected(prev => {
-          if (prev.includes(id)) return prev.filter(x => x !== id);
-          const next = [...prev, id];
-          if (next.length === 2) {
-            // commit kings
-            setCurrentKings(prevKings => {
-              setGameStats(s => {
-                const n = {...s};
-                next.forEach(kid => {
-                  if (!prevKings.includes(kid)) n[kid] = {...n[kid], wins: n[kid].wins + 1};
-                });
-                return n;
+        const alreadySelected = selected.includes(id);
+        if (alreadySelected) {
+          setSelected(prev => prev.filter(x => x !== id));
+          return;
+        }
+
+        const next = [...selected, id];
+
+        if (next.length === 2) {
+          // Commit the 2 selected players as new kings
+          setCurrentKings(prevKings => {
+            setGameStats(s => {
+              const n = {...s};
+              next.forEach(kid => {
+                if (!prevKings.includes(kid) && n[kid]) {
+                  n[kid] = {...n[kid], wins: n[kid].wins + 1};
+                }
               });
-              return next;
+              return n;
             });
-            if (!isRunning) setIsRunning(true);
-            setTimeout(() => setSelected([]), 200);
-            return next; // briefly keep for visual, cleared by timeout
-          }
-          return next;
-        });
+            return next;
+          });
+          setIsRunning(true);
+          setSelected([]);
+        } else {
+          setSelected(next);
+        }
       };
 
       // ── winner button ─────────────────────────────────────────
@@ -2753,7 +2759,7 @@
       const lb = getLeaderboard();
       const p1 = gamePlayers.find(p => p.id === currentKings[0]);
       const p2 = gamePlayers.find(p => p.id === currentKings[1]);
-      const instrText = selected.length===0 ? 'Tap the 2 players who won' : selected.length===1 ? 'Tap 1 more winner' : 'Recording…';
+      const instrText = selected.length===0 ? (currentKings.length===0 ? 'Tap 2 players to start' : 'Tap the 2 players who won') : selected.length===1 ? 'Tap 1 more' : 'Recording…';
 
       // ──────────────────────────────────────────────────────────
       // RESULTS SCREEN
@@ -2888,7 +2894,7 @@
 
             {/* Instruction */}
             <div style={{ textAlign:'center', fontSize:'12px', fontWeight:'600', color: selected.length===1?'var(--accent)':'var(--text3)', letterSpacing:'0.04em', marginBottom:'14px', textTransform:'uppercase' }}>
-              {!isRunning && currentKings.length === 0 ? 'Tap 2 winners to start' : instrText}
+              {instrText}
             </div>
 
             {/* Player grid */}
