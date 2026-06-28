@@ -2927,7 +2927,7 @@ function InstantGameModal({
   const [manualName, setManualName] = useState('');
   const [showManual, setShowManual] = useState(false);
   useEffect(() => {
-    db.collection('users').limit(100).get().then(s => {
+    db.collection('users').limit(1000).get().then(s => {
       setAllUsers(s.docs.map(d => ({
         oderId: d.id,
         ...d.data()
@@ -3476,7 +3476,7 @@ function CreateEventScreen({
       id: d.id,
       ...d.data()
     })))).catch(() => {});
-    db.collection('users').limit(100).get().then(s => setAllUsers(s.docs.map(d => ({
+    db.collection('users').limit(1000).get().then(s => setAllUsers(s.docs.map(d => ({
       id: d.id,
       ...d.data()
     })).filter(u => u.id !== (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid)))).catch(() => {});
@@ -5534,7 +5534,7 @@ function EventDetailScreen({
       id: d.id,
       ...d.data()
     })))).catch(() => {});
-    db.collection('users').limit(100).get().then(s => setEditAllUsers(s.docs.map(d => ({
+    db.collection('users').limit(1000).get().then(s => setEditAllUsers(s.docs.map(d => ({
       id: d.id,
       ...d.data()
     })).filter(u => u.id !== (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid)))).catch(() => {});
@@ -10186,7 +10186,7 @@ function PlayersScreen() {
   const [viewingPlayer, setViewingPlayer] = useState(null);
   const [messagingPlayer, setMessagingPlayer] = useState(null);
   useEffect(() => {
-    db.collection('users').limit(100).get().then(s => {
+    db.collection('users').limit(1000).get().then(s => {
       setAllPlayers(s.docs.map(d => ({
         oderId: d.id,
         ...d.data()
@@ -13286,6 +13286,8 @@ function App() {
       bottom: 0,
       left: 0,
       right: 0,
+      maxWidth: '500px',
+      margin: '0 auto',
       background: 'var(--bg2)',
       borderTop: '1px solid var(--border)',
       display: 'flex',
