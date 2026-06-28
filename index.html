@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <!-- build: 1771862556 -->
+  <!-- build: 1782000000 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -3464,6 +3464,13 @@ function CreateEventScreen({
   const [allUsers, setAllUsers] = useState([]);
   const [showInvitePicker, setShowInvitePicker] = useState(false);
   const [inviteSearch, setInviteSearch] = useState('');
+  // Simple Save state — reusable templates + favorite locations
+  const [templates, setTemplates] = useState([]);
+  const [savedLocations, setSavedLocations] = useState([]);
+  const [showNameTemplate, setShowNameTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [savedMsg, setSavedMsg] = useState('');
   useEffect(() => {
     db.collection('users').where('roles', 'array-contains', 'coach').limit(50).get().then(s => setCoaches(s.docs.map(d => ({
       id: d.id,
@@ -3474,6 +3481,18 @@ function CreateEventScreen({
       ...d.data()
     })).filter(u => u.id !== (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid)))).catch(() => {});
   }, []);
+  useEffect(() => {
+    const uid = currentUser && currentUser.uid;
+    if (!uid) return;
+    db.collection('users').doc(uid).collection('gameTemplates').orderBy('updatedAt', 'desc').get().then(s => setTemplates(s.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    })))).catch(() => {});
+    db.collection('users').doc(uid).collection('savedLocations').orderBy('createdAt', 'desc').get().then(s => setSavedLocations(s.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    })))).catch(() => {});
+  }, [currentUser]);
   const filteredCoaches = coachSearch.trim() ? coaches.filter(c => `${c.firstName} ${c.lastName}`.toLowerCase().includes(coachSearch.toLowerCase())) : coaches;
   const filteredUsers = inviteSearch.trim() ? allUsers.filter(u => `${u.firstName} ${u.lastName}`.toLowerCase().includes(inviteSearch.toLowerCase())) : allUsers;
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -3503,6 +3522,112 @@ function CreateEventScreen({
         invitedPlayers: has ? f.invitedPlayers.filter(p => p.id !== u.id) : [...f.invitedPlayers, u]
       };
     });
+  };
+  const flashSaved = msg => {
+    setSavedMsg(msg);
+    setTimeout(() => setSavedMsg(''), 2200);
+  };
+  // ── Simple Save: game templates ──
+  const saveTemplate = async () => {
+    const uid = currentUser && currentUser.uid;
+    const name = templateName.trim() || form.title.trim();
+    if (!uid || !name) return;
+    setSavingTemplate(true);
+    try {
+      const tpl = {
+        name,
+        title: form.title || '',
+        location: form.location || '',
+        locationCoords: form.locationCoords || null,
+        isPrivate: !!form.isPrivate,
+        hasMaxPlayers: !!form.hasMaxPlayers,
+        maxPlayers: form.maxPlayers || 8,
+        allowWaitlist: form.allowWaitlist !== false,
+        coach: form.coach || null,
+        invitedPlayers: form.invitedPlayers || [],
+        notes: form.notes || '',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      const ref = await db.collection('users').doc(uid).collection('gameTemplates').add(tpl);
+      setTemplates(prev => [{
+        id: ref.id,
+        ...tpl
+      }, ...prev]);
+      setShowNameTemplate(false);
+      setTemplateName('');
+      flashSaved('Template saved');
+    } catch (e) {
+      console.error('Save template error:', e);
+    }
+    setSavingTemplate(false);
+  };
+  const applyTemplate = tpl => {
+    setForm(f => ({
+      ...f,
+      title: tpl.title || '',
+      location: tpl.location || '',
+      locationCoords: tpl.locationCoords || null,
+      isPrivate: tpl.isPrivate !== false,
+      hasMaxPlayers: !!tpl.hasMaxPlayers,
+      maxPlayers: tpl.maxPlayers || 8,
+      allowWaitlist: tpl.allowWaitlist !== false,
+      coach: tpl.coach || null,
+      invitedPlayers: tpl.invitedPlayers || [],
+      notes: tpl.notes || ''
+    }));
+    flashSaved(`Loaded "${tpl.name}"`);
+  };
+  const deleteTemplate = async id => {
+    const uid = currentUser && currentUser.uid;
+    if (!uid) return;
+    setTemplates(prev => prev.filter(t => t.id !== id));
+    try {
+      await db.collection('users').doc(uid).collection('gameTemplates').doc(id).delete();
+    } catch (e) {
+      console.error('Delete template error:', e);
+    }
+  };
+  // ── Simple Save: favorite locations ──
+  const saveCurrentLocation = async () => {
+    const uid = currentUser && currentUser.uid;
+    if (!uid || !form.location.trim()) return;
+    const exists = savedLocations.some(l => l.address === form.location.trim());
+    if (exists) {
+      flashSaved('Location already saved');
+      return;
+    }
+    try {
+      const loc = {
+        label: form.location.split(',')[0],
+        address: form.location.trim(),
+        locationCoords: form.locationCoords || null,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      const ref = await db.collection('users').doc(uid).collection('savedLocations').add(loc);
+      setSavedLocations(prev => [{
+        id: ref.id,
+        ...loc
+      }, ...prev]);
+      flashSaved('Location saved');
+    } catch (e) {
+      console.error('Save location error:', e);
+    }
+  };
+  const applySavedLocation = loc => setForm(f => ({
+    ...f,
+    location: loc.address || '',
+    locationCoords: loc.locationCoords || null
+  }));
+  const deleteSavedLocation = async id => {
+    const uid = currentUser && currentUser.uid;
+    if (!uid) return;
+    setSavedLocations(prev => prev.filter(l => l.id !== id));
+    try {
+      await db.collection('users').doc(uid).collection('savedLocations').doc(id).delete();
+    } catch (e) {
+      console.error('Delete location error:', e);
+    }
   };
   const handleSubmit = async () => {
     if (!form.title.trim()) {
@@ -3672,7 +3797,67 @@ function CreateEventScreen({
       color: '#f87171',
       fontSize: '14px'
     }
-  }, error), /*#__PURE__*/React.createElement(SectionLabel, null, "Details"), /*#__PURE__*/React.createElement(Input, {
+  }, error), savedMsg && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'var(--accent3)',
+      border: '1px solid rgba(74,222,128,0.3)',
+      borderRadius: 'var(--radius2)',
+      padding: '10px 14px',
+      marginBottom: '14px',
+      color: 'var(--accent)',
+      fontSize: '13px',
+      fontWeight: '600',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "Check",
+    s: 14,
+    c: "var(--accent)"
+  }), savedMsg), templates.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '18px'
+    }
+  }, /*#__PURE__*/React.createElement(SectionLabel, null, "Start from a template"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: '8px',
+      overflowX: 'auto',
+      paddingBottom: '4px'
+    }
+  }, templates.map(t => /*#__PURE__*/React.createElement("div", {
+    key: t.id,
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      flexShrink: 0,
+      background: 'var(--surface)',
+      border: '1px solid var(--border2)',
+      borderRadius: '20px',
+      padding: '7px 8px 7px 14px'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    onClick: () => applyTemplate(t),
+    style: {
+      fontSize: '13px',
+      fontWeight: '600',
+      color: 'var(--text)',
+      cursor: 'pointer',
+      whiteSpace: 'nowrap'
+    }
+  }, t.name), /*#__PURE__*/React.createElement("span", {
+    onClick: () => deleteTemplate(t.id),
+    style: {
+      display: 'flex',
+      cursor: 'pointer'
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "X",
+    s: 12,
+    c: "var(--text3)"
+  })))))), /*#__PURE__*/React.createElement(SectionLabel, null, "Details"), /*#__PURE__*/React.createElement(Input, {
     label: "Title",
     value: form.title,
     onChange: e => setForm({
@@ -3689,7 +3874,71 @@ function CreateEventScreen({
       locationCoords: coords
     }),
     placeholder: "Search court or venue..."
-  }), /*#__PURE__*/React.createElement(SectionLabel, null, "Date & Time"), /*#__PURE__*/React.createElement("div", {
+  }), (savedLocations.length > 0 || form.location && form.location.trim()) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: '6px',
+      marginTop: '-6px',
+      marginBottom: '18px'
+    }
+  }, form.location && form.location.trim() && !savedLocations.some(l => l.address === form.location.trim()) && /*#__PURE__*/React.createElement("button", {
+    onClick: saveCurrentLocation,
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '5px',
+      background: 'transparent',
+      border: '1px dashed rgba(74,222,128,0.4)',
+      borderRadius: '20px',
+      padding: '6px 12px',
+      color: 'var(--accent)',
+      fontSize: '12px',
+      fontWeight: '600',
+      cursor: 'pointer'
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "StarOutline",
+    s: 13,
+    c: "var(--accent)"
+  }), "Save this location"), savedLocations.map(l => /*#__PURE__*/React.createElement("div", {
+    key: l.id,
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+      background: 'var(--surface)',
+      border: '1px solid var(--border2)',
+      borderRadius: '20px',
+      padding: '6px 8px 6px 12px'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    onClick: () => applySavedLocation(l),
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '5px',
+      fontSize: '12px',
+      fontWeight: '600',
+      color: 'var(--text2)',
+      cursor: 'pointer',
+      whiteSpace: 'nowrap'
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "MapPin",
+    s: 12,
+    c: "var(--text3)"
+  }), l.label), /*#__PURE__*/React.createElement("span", {
+    onClick: () => deleteSavedLocation(l.id),
+    style: {
+      display: 'flex',
+      cursor: 'pointer'
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "X",
+    s: 11,
+    c: "var(--text3)"
+  }))))), /*#__PURE__*/React.createElement(SectionLabel, null, "Date & Time"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: '10px',
@@ -4372,7 +4621,80 @@ function CreateEventScreen({
       minHeight: '80px',
       marginTop: '8px'
     }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: '8px',
+      marginBottom: '14px'
+    }
+  }, !showNameTemplate ? /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setTemplateName(form.title || '');
+      setShowNameTemplate(true);
+    },
+    style: {
+      width: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '8px',
+      padding: '12px',
+      borderRadius: 'var(--radius2)',
+      background: 'transparent',
+      border: '1px dashed rgba(255,255,255,0.15)',
+      color: 'var(--text2)',
+      fontSize: '14px',
+      fontWeight: '600',
+      cursor: 'pointer'
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "StarOutline",
+    s: 15,
+    c: "var(--text2)"
+  }), "Save as template") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: '8px',
+      padding: '12px',
+      background: 'var(--surface)',
+      border: '1px solid var(--border2)',
+      borderRadius: 'var(--radius2)'
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    value: templateName,
+    onChange: e => setTemplateName(e.target.value),
+    onKeyDown: e => e.key === 'Enter' && saveTemplate(),
+    placeholder: "Template name...",
+    autoFocus: true,
+    style: {
+      flex: 1,
+      padding: '10px 14px',
+      background: 'var(--bg)',
+      border: '1px solid var(--border2)',
+      borderRadius: 'var(--radius3)',
+      color: 'var(--text)',
+      fontSize: '14px',
+      outline: 'none'
+    }
   }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: saveTemplate,
+    disabled: savingTemplate || !templateName.trim(),
+    size: "sm"
+  }, savingTemplate ? '...' : 'Save'), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setShowNameTemplate(false);
+      setTemplateName('');
+    },
+    style: {
+      padding: '0 12px',
+      background: 'var(--surface2)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius3)',
+      color: 'var(--text2)',
+      fontSize: '13px',
+      fontWeight: '600',
+      cursor: 'pointer'
+    }
+  }, "Cancel"))), /*#__PURE__*/React.createElement(Btn, {
     onClick: handleSubmit,
     disabled: saving,
     size: "lg"
@@ -4924,7 +5246,8 @@ function CalendarModal({
 function EventDetailScreen({
   eventId,
   onBack,
-  onStartGame
+  onStartGame,
+  onDuplicated
 }) {
   var _event$locationCoords3, _event$locationCoords4, _event$dateTime6, _replyingTo$authorNam, _replyingTo$authorNam2, _event$dateTime7;
   const {
@@ -4951,6 +5274,11 @@ function EventDetailScreen({
   const [savingEdit, setSavingEdit] = useState(false);
   const [showEditDatePicker, setShowEditDatePicker] = useState(false);
   const [showEditTimePicker, setShowEditTimePicker] = useState(false);
+  // duplicate-event state
+  const [dupForm, setDupForm] = useState(null); // { date, hour, minute, ampm }
+  const [showDupDatePicker, setShowDupDatePicker] = useState(false);
+  const [showDupTimePicker, setShowDupTimePicker] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   // edit-event coach/invite state
   const [editCoaches, setEditCoaches] = useState([]);
   const [editAllUsers, setEditAllUsers] = useState([]);
@@ -5266,6 +5594,68 @@ function EventDetailScreen({
     }
   };
 
+  // Duplicate this event — copies all config, resets runtime state, only date/time changes.
+  // The original event is never modified.
+  const startDuplicate = () => {
+    const base = event && event.dateTime && event.dateTime.toDate ? event.dateTime.toDate() : new Date(event && event.dateTime || Date.now());
+    let h = base.getHours();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    setDupForm({
+      date: base,
+      hour: h,
+      minute: base.getMinutes(),
+      ampm
+    });
+    setShowDupDatePicker(true);
+  };
+  const runDuplicate = async formArg => {
+    const f = formArg || dupForm;
+    if (!event || !f || !currentUser) return;
+    setDuplicating(true);
+    try {
+      const dt = new Date(f.date);
+      let h = parseInt(f.hour) % 12;
+      if (f.ampm === 'PM') h += 12;
+      dt.setHours(h, parseInt(f.minute), 0, 0);
+      const hostRsvp = {
+        oderId: currentUser.uid,
+        userName: `${userProfile && userProfile.firstName || ''} ${userProfile && userProfile.lastName || ''}`.trim(),
+        firstName: userProfile && userProfile.firstName || '',
+        status: 'going',
+        isHost: true,
+        photoURL: userProfile && userProfile.photoURL || ''
+      };
+      const docRef = await db.collection('events').add({
+        title: event.title || '',
+        location: event.location || '',
+        locationCoords: event.locationCoords || null,
+        dateTime: firebase.firestore.Timestamp.fromDate(dt),
+        maxPlayers: event.maxPlayers || null,
+        isPrivate: !!event.isPrivate,
+        allowWaitlist: event.allowWaitlist !== false,
+        coachId: event.coachId || null,
+        coachName: event.coachName || '',
+        notes: event.notes || '',
+        hostId: currentUser.uid,
+        hostName: `${userProfile && userProfile.firstName || ''} ${userProfile && userProfile.lastName || ''}`.trim() || currentUser.email,
+        hostPhotoURL: userProfile && userProfile.photoURL || '',
+        rsvps: [hostRsvp],
+        waitlist: [],
+        cancelled: false,
+        isCompleted: false,
+        duplicatedFrom: eventId,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      setDuplicating(false);
+      setDupForm(null);
+      if (onDuplicated) onDuplicated(docRef.id);
+    } catch (e) {
+      console.error('Duplicate event error:', e);
+      setDuplicating(false);
+    }
+  };
+
   // Handle @mention detection
   const handleCommentChange = e => {
     const val = e.target.value;
@@ -5498,6 +5888,30 @@ function EventDetailScreen({
       s: 14,
       c: "var(--text2)"
     }), " Edit Event"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        setEventMenuOpen(false);
+        startDuplicate();
+      },
+      style: {
+        width: '100%',
+        padding: '12px 16px',
+        background: 'none',
+        border: 'none',
+        color: 'var(--text)',
+        fontSize: '13px',
+        fontWeight: '600',
+        cursor: 'pointer',
+        textAlign: 'left',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        borderBottom: '1px solid var(--border)'
+      }
+    }, /*#__PURE__*/React.createElement(I, {
+      n: "Repeat",
+      s: 14,
+      c: "var(--text2)"
+    }), " Duplicate Event"), /*#__PURE__*/React.createElement("button", {
       onClick: () => {
         setShowCancelConfirm(true);
         setEventMenuOpen(false);
@@ -7381,6 +7795,39 @@ function EventDetailScreen({
       setShowEditTimePicker(false);
     },
     onClose: () => setShowEditTimePicker(false)
+  }), showDupDatePicker && dupForm && /*#__PURE__*/React.createElement(DatePickerModal, {
+    date: dupForm.date,
+    onConfirm: d => {
+      setDupForm(f => ({
+        ...f,
+        date: d
+      }));
+      setShowDupDatePicker(false);
+      setShowDupTimePicker(true);
+    },
+    onClose: () => {
+      setShowDupDatePicker(false);
+      setDupForm(null);
+    }
+  }), showDupTimePicker && dupForm && /*#__PURE__*/React.createElement(TimePickerModal, {
+    hour: dupForm.hour,
+    minute: dupForm.minute,
+    ampm: dupForm.ampm,
+    onConfirm: (h, m, ap) => {
+      const nf = {
+        ...dupForm,
+        hour: h,
+        minute: m,
+        ampm: ap
+      };
+      setDupForm(nf);
+      setShowDupTimePicker(false);
+      runDuplicate(nf);
+    },
+    onClose: () => {
+      setShowDupTimePicker(false);
+      setDupForm(null);
+    }
   }), showCalendarPicker && /*#__PURE__*/React.createElement("div", {
     onClick: () => setShowCalendarPicker(false),
     style: {
@@ -11393,6 +11840,62 @@ function LiveGameScreen({
         completedAt: firebase.firestore.FieldValue.serverTimestamp()
       }).catch(() => {});
     }
+
+    // Persist a permanent game result + per-player score records (additive — never deletes)
+    try {
+      const ts = firebase.firestore.FieldValue.serverTimestamp();
+      const standings = lb.map((pl, i) => ({
+        playerId: pl.id,
+        rank: i + 1,
+        timeMs: pl.timeMs,
+        wins: pl.wins,
+        winners: pl.winners,
+        avgMs: Math.round(pl.avg || 0)
+      }));
+      const resultRef = db.collection('gameResults').doc();
+      const batch = db.batch();
+      batch.set(resultRef, {
+        eventId: (event === null || event === void 0 ? void 0 : event.id) || null,
+        hostId: (event === null || event === void 0 ? void 0 : event.hostId) || (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid) || null,
+        format: format || 'kings',
+        durationMs: totalMs,
+        winnerId: topId || null,
+        players: gamePlayers.map(p => ({
+          playerId: p.id || '',
+          name: p.name || '',
+          photoURL: p.photoURL || '',
+          isManual: !!(p.id && p.id.startsWith('manual_'))
+        })),
+        standings: standings,
+        completedAt: ts,
+        createdAt: ts
+      });
+      lb.forEach((pl, i) => {
+        if (!pl.id || pl.id.startsWith('manual_') || pl.id === 'host') return;
+        const psRef = db.collection('playerScores').doc();
+        batch.set(psRef, {
+          playerId: pl.id,
+          gameResultId: resultRef.id,
+          eventId: (event === null || event === void 0 ? void 0 : event.id) || null,
+          rank: i + 1,
+          isWinner: i === 0,
+          timeMs: pl.timeMs,
+          wins: pl.wins,
+          winners: pl.winners,
+          avgMs: Math.round(pl.avg || 0),
+          completedAt: ts
+        });
+      });
+      await batch.commit();
+      if (event !== null && event !== void 0 && event.id) {
+        await db.collection('events').doc(event.id).update({
+          resultId: resultRef.id
+        }).catch(() => {});
+      }
+    } catch (e) {
+      console.error('Save game result error:', e);
+    }
+
     setSavingResults(false);
     setPhase('results');
   };
@@ -12760,7 +13263,8 @@ function App() {
     key: 'event-' + eventId,
     eventId: eventId,
     onBack: () => navigate('events'),
-    onStartGame: e => setLiveGame(e)
+    onStartGame: e => setLiveGame(e),
+    onDuplicated: id => navigate('events', id)
   }), screen === 'create' && /*#__PURE__*/React.createElement(CreateEventScreen, {
     key: "create",
     onBack: () => navigate('home'),
