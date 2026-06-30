@@ -3189,8 +3189,10 @@ function EventsScreen({
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('upcoming');
   const {
-    currentUser
+    currentUser,
+    userProfile
   } = useAuth();
+  const isCoach = ((userProfile === null || userProfile === void 0 ? void 0 : userProfile.roles) || []).includes('coach');
   useEffect(() => {
     const now = firebase.firestore.Timestamp.now();
     let q = db.collection('events').orderBy('dateTime');
@@ -3201,14 +3203,24 @@ function EventsScreen({
     } else if (filter === 'past') {
       // For past: use where only, sort handled client-side (avoids needing new index)
       q = db.collection('events').where('dateTime', '<', now).orderBy('dateTime', 'desc');
+    } else if (filter === 'coaching') {
+      // Games this user is assigned to coach — equality filter only, sort client-side (no composite index)
+      q = db.collection('events').where('coachId', '==', currentUser.uid);
     }
-    return q.limit(30).onSnapshot(s => {
+    return q.limit(50).onSnapshot(s => {
       let evts = s.docs.map(d => ({
         id: d.id,
         ...d.data()
       }));
       // Hide cancelled events from upcoming tab
       if (filter === 'upcoming') evts = evts.filter(e => !e.cancelled);
+      if (filter === 'coaching') {
+        evts = evts.filter(e => !e.cancelled).sort((a, b) => {
+          const at = a.dateTime && a.dateTime.toMillis ? a.dateTime.toMillis() : 0;
+          const bt = b.dateTime && b.dateTime.toMillis ? b.dateTime.toMillis() : 0;
+          return at - bt;
+        });
+      }
       setEvents(evts);
       setLoading(false);
     }, () => setLoading(false));
@@ -3261,10 +3273,13 @@ function EventsScreen({
     }, {
       key: 'mine',
       label: 'My Games'
-    }, {
+    }].concat(isCoach ? [{
+      key: 'coaching',
+      label: 'Coaching'
+    }] : []).concat([{
       key: 'past',
       label: 'Past'
-    }],
+    }]),
     active: filter,
     onChange: setFilter
   }), loading ? /*#__PURE__*/React.createElement("div", {
@@ -5791,6 +5806,8 @@ function EventDetailScreen({
   const isGoing = going.some(r => r.oderId === (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid));
   const isOnWaitlist = waitlist.some(r => r.oderId === (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid));
   const isHost = event.hostId === (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid);
+  const isAssignedCoach = !!(event.coachId && event.coachId === (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid));
+  const canStart = isHost || isAssignedCoach;
   const isFull = !!(event.maxPlayers && going.length >= event.maxPlayers && !isGoing);
   const d = (_event$dateTime6 = event.dateTime) !== null && _event$dateTime6 !== void 0 && _event$dateTime6.toDate ? event.dateTime.toDate() : new Date(event.dateTime || Date.now());
 
@@ -5832,7 +5849,7 @@ function EventDetailScreen({
         display: 'flex',
         gap: '8px'
       }
-    }, isHost && !event.cancelled && /*#__PURE__*/React.createElement(Btn, {
+    }, canStart && !event.cancelled && /*#__PURE__*/React.createElement(Btn, {
       onClick: () => onStartGame(event),
       size: "sm",
       icon: "Zap"
@@ -6149,7 +6166,7 @@ function EventDetailScreen({
     style: {
       marginBottom: '20px'
     }
-  }, !isHost && !isGoing && !isOnWaitlist && (isFull ? event.allowWaitlist !== false ? /*#__PURE__*/React.createElement(Btn, {
+  }, !isHost && !isAssignedCoach && !isGoing && !isOnWaitlist && (isFull ? event.allowWaitlist !== false ? /*#__PURE__*/React.createElement(Btn, {
     onClick: () => handleRSVP('waitlist'),
     variant: "secondary",
     size: "lg",
