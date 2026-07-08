@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <!-- build: 1782000000 -->
+  <!-- build: 1783500000 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -3188,6 +3188,7 @@ function EventsScreen({
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('upcoming');
+  const [exporting, setExporting] = useState(false);
   const {
     currentUser,
     userProfile
@@ -3247,6 +3248,74 @@ function EventsScreen({
       minute: '2-digit'
     });
   };
+  // Export every game + who played when to a CSV (opens in Google Sheets / Excel)
+  const exportGames = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const [evSnap, resSnap] = await Promise.all([db.collection('events').orderBy('dateTime', 'desc').limit(500).get(), db.collection('gameResults').limit(500).get().catch(() => ({
+        forEach: () => {},
+        docs: []
+      }))]);
+      // index recorded results by eventId -> { playerId: standing }
+      const byEvent = {};
+      resSnap.forEach && resSnap.forEach(doc => {
+        const r = doc.data();
+        if (!r.eventId) return;
+        if (!byEvent[r.eventId]) byEvent[r.eventId] = {};
+        (r.standings || []).forEach(s => {
+          byEvent[r.eventId][s.playerId] = s;
+        });
+      });
+      const now = new Date();
+      const esc = v => '"' + (v == null ? '' : String(v)).replace(/"/g, '""') + '"';
+      const headers = ['Date', 'Time', 'Game', 'Location', 'Host', 'Coach', 'Status', 'Player', 'RSVP', 'Played', 'Court Time (min)', 'Wins', 'Winners'];
+      const rows = [headers.map(esc).join(',')];
+      evSnap.docs.forEach(doc => {
+        const e = {
+          id: doc.id,
+          ...doc.data()
+        };
+        const d = e.dateTime && e.dateTime.toDate ? e.dateTime.toDate() : new Date(e.dateTime || Date.now());
+        const dateStr = d.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
+        const timeStr = d.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit'
+        });
+        const status = e.cancelled ? 'Cancelled' : e.isCompleted ? 'Completed' : d > now ? 'Upcoming' : 'Past';
+        const stand = byEvent[e.id] || {};
+        const parts = e.rsvps || [];
+        const base = [dateStr, timeStr, e.title || '', (e.location || '').split(',')[0], e.hostName || '', e.coachName || '', status];
+        if (parts.length === 0) {
+          rows.push(base.concat(['', '', '', '', '', '']).map(esc).join(','));
+        } else {
+          parts.forEach(r => {
+            const s = stand[r.oderId];
+            rows.push(base.concat([r.userName || r.firstName || '', r.status || '', s ? 'Yes' : '', s ? Math.round((s.timeMs || 0) / 60000) : '', s && s.wins != null ? s.wins : '', s && s.winners != null ? s.winners : '']).map(esc).join(','));
+          });
+        }
+      });
+      const csv = rows.join('\r\n');
+      const blob = new Blob([csv], {
+        type: 'text/csv;charset=utf-8;'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'tennisverse-games.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export error:', err);
+    }
+    setExporting(false);
+  };
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: '100vh',
@@ -3261,11 +3330,22 @@ function EventsScreen({
     }
   }, /*#__PURE__*/React.createElement(PageHeader, {
     title: "Games",
-    right: /*#__PURE__*/React.createElement(Btn, {
+    right: /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: '8px'
+      }
+    }, /*#__PURE__*/React.createElement(Btn, {
+      onClick: exportGames,
+      size: "sm",
+      variant: "secondary",
+      disabled: exporting,
+      icon: "Share"
+    }, exporting ? '…' : 'Export'), /*#__PURE__*/React.createElement(Btn, {
       onClick: onCreateEvent,
       size: "sm",
       icon: "Plus"
-    }, "New")
+    }, "New"))
   }), /*#__PURE__*/React.createElement(Tabs, {
     tabs: [{
       key: 'upcoming',
