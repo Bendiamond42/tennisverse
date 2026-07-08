@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <!-- build: 1782000000 -->
+  <!-- build: 1782500000 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -10488,6 +10488,8 @@ function ProfileScreen({
   const [saving, setSaving] = useState(false);
   const [gameHistory, setGameHistory] = useState([]);
   const [showCoachEditor, setShowCoachEditor] = useState(false);
+  const [matchScores, setMatchScores] = useState([]);
+  const [loadingScores, setLoadingScores] = useState(true);
   useEffect(() => {
     if (userProfile) setForm({
       firstName: userProfile.firstName || '',
@@ -10506,6 +10508,23 @@ function ProfileScreen({
       })).filter(g => (g.rsvps || []).some(r => r.oderId === currentUser.uid && r.status === 'going'));
       setGameHistory(myGames);
     }).catch(() => {});
+  }, [currentUser]);
+  useEffect(() => {
+    if (!currentUser) return;
+    setLoadingScores(true);
+    // Single equality filter — no composite index needed; sort client-side.
+    db.collection('playerScores').where('playerId', '==', currentUser.uid).limit(200).get().then(s => {
+      const rows = s.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      })).sort((a, b) => {
+        const at = a.completedAt && a.completedAt.toMillis ? a.completedAt.toMillis() : 0;
+        const bt = b.completedAt && b.completedAt.toMillis ? b.completedAt.toMillis() : 0;
+        return bt - at;
+      });
+      setMatchScores(rows);
+      setLoadingScores(false);
+    }).catch(() => setLoadingScores(false));
   }, [currentUser]);
   const save = async () => {
     setSaving(true);
@@ -10577,6 +10596,54 @@ function ProfileScreen({
       year: 'numeric'
     });
   };
+  const fmtClock = ms => {
+    const s = Math.floor((ms || 0) / 1000);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  };
+  const fmtDur = ms => {
+    const m = Math.round((ms || 0) / 60000);
+    return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
+  };
+  // Derived per-user analytics from recorded playerScores
+  const analytics = (() => {
+    const g = matchScores.length;
+    if (!g) return null;
+    const firsts = matchScores.filter(s => s.rank === 1).length;
+    const podiums = matchScores.filter(s => (s.rank || 99) <= 3).length;
+    const totalWins = matchScores.reduce((a, s) => a + (s.wins || 0), 0);
+    const totalWinners = matchScores.reduce((a, s) => a + (s.winners || 0), 0);
+    const totalMs = matchScores.reduce((a, s) => a + (s.timeMs || 0), 0);
+    const avgMs = Math.round(totalMs / g);
+    const winRate = Math.round(firsts / g * 100);
+    let cur = 0;
+    for (const s of matchScores) {
+      if (s.rank === 1) cur++;else break;
+    }
+    let lng = 0,
+      run = 0;
+    for (let i = matchScores.length - 1; i >= 0; i--) {
+      if (matchScores[i].rank === 1) {
+        run++;
+        if (run > lng) lng = run;
+      } else run = 0;
+    }
+    const recent = matchScores.slice(0, 10).reverse();
+    const maxMs = Math.max(...recent.map(s => s.timeMs || 0), 1);
+    return {
+      g,
+      firsts,
+      podiums,
+      totalWins,
+      totalWinners,
+      totalMs,
+      avgMs,
+      winRate,
+      cur,
+      lng,
+      recent,
+      maxMs
+    };
+  })();
   const InfoRow = ({
     icon,
     label,
@@ -11147,6 +11214,197 @@ function ProfileScreen({
       lineHeight: '1.5'
     }
   }, "\uD83D\uDCA1 Enabling Coach lets you appear in coach search results and get hired for sessions.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '24px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '11px',
+      fontWeight: '700',
+      color: 'var(--text3)',
+      letterSpacing: '0.08em',
+      textTransform: 'uppercase',
+      marginBottom: '12px'
+    }
+  }, "Performance"), loadingScores ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: '24px',
+      color: 'var(--text3)',
+      fontSize: '13px'
+    }
+  }, "Loading stats\u2026") : !analytics ? /*#__PURE__*/React.createElement(Empty, {
+    icon: "TrendingUp",
+    title: "No match stats yet",
+    sub: "Finish a King's Court game and your analytics show up here"
+  }) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(3,1fr)',
+      gap: '8px',
+      marginBottom: '8px'
+    }
+  }, [{
+    label: 'Win Rate',
+    value: analytics.winRate + '%',
+    color: '#4ade80'
+  }, {
+    label: 'Avg Time',
+    value: fmtClock(analytics.avgMs),
+    color: '#60a5fa'
+  }, {
+    label: 'Streak',
+    value: String(analytics.cur),
+    color: '#fbbf24'
+  }].map(t => /*#__PURE__*/React.createElement("div", {
+    key: t.label,
+    style: {
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius2)',
+      padding: '14px 8px',
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: '900',
+      fontSize: '20px',
+      letterSpacing: '-0.02em',
+      color: t.color
+    }
+  }, t.value), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '10px',
+      color: 'var(--text3)',
+      fontWeight: '600',
+      marginTop: '3px',
+      textTransform: 'uppercase',
+      letterSpacing: '0.04em'
+    }
+  }, t.label)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(3,1fr)',
+      gap: '8px',
+      marginBottom: '12px'
+    }
+  }, [{
+    label: 'Games',
+    value: String(analytics.g)
+  }, {
+    label: '1st Place',
+    value: String(analytics.firsts)
+  }, {
+    label: 'Court Time',
+    value: fmtDur(analytics.totalMs)
+  }].map(t => /*#__PURE__*/React.createElement("div", {
+    key: t.label,
+    style: {
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius2)',
+      padding: '14px 8px',
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: '900',
+      fontSize: '20px',
+      letterSpacing: '-0.02em',
+      color: 'var(--text)'
+    }
+  }, t.value), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '10px',
+      color: 'var(--text3)',
+      fontWeight: '600',
+      marginTop: '3px',
+      textTransform: 'uppercase',
+      letterSpacing: '0.04em'
+    }
+  }, t.label)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius2)',
+      padding: '14px',
+      marginBottom: '12px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '11px',
+      color: 'var(--text3)',
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: '0.05em',
+      marginBottom: '10px'
+    }
+  }, "Court time \xB7 last " + analytics.recent.length + " games"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'flex-end',
+      gap: '4px',
+      height: '70px'
+    }
+  }, analytics.recent.map((s, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    title: fmtClock(s.timeMs),
+    style: {
+      flex: 1,
+      minWidth: '8px',
+      height: Math.max(6, Math.round((s.timeMs || 0) / analytics.maxMs * 64)) + 'px',
+      background: s.rank === 1 ? 'var(--accent)' : 'var(--surface2)',
+      borderRadius: '4px 4px 2px 2px'
+    }
+  })))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '11px',
+      color: 'var(--text3)',
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: '0.05em',
+      marginBottom: '4px'
+    }
+  }, "Recent results"), matchScores.slice(0, 6).map(s => /*#__PURE__*/React.createElement("div", {
+    key: s.id,
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      padding: '12px 0',
+      borderBottom: '1px solid rgba(255,255,255,0.05)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '18px',
+      width: '28px',
+      textAlign: 'center',
+      flexShrink: 0
+    }
+  }, s.rank === 1 ? '\uD83E\uDD47' : s.rank === 2 ? '\uD83E\uDD48' : s.rank === 3 ? '\uD83E\uDD49' : '#' + s.rank), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '14px',
+      fontWeight: '600'
+    }
+  }, fmtDate(s.completedAt)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '12px',
+      color: 'var(--text3)',
+      marginTop: '1px'
+    }
+  }, (s.wins || 0) + ((s.wins || 0) === 1 ? ' win' : ' wins') + ((s.winners || 0) > 0 ? ' \xB7 \uD83D\uDD25' + s.winners : ''))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: 'DM Mono',
+      fontSize: '14px',
+      color: s.rank === 1 ? 'var(--accent)' : 'var(--text)',
+      flexShrink: 0
+    }
+  }, fmtClock(s.timeMs)))))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: '24px'
     }
