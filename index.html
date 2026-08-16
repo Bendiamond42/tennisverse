@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <!-- build: 1783500000 -->
+  <!-- build: 1784000000 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -118,7 +118,11 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
 
   <!-- Google Maps -->
-  <script>window.googleMapsLoaded = false; window.googleMapsError = false;</script>
+  <script>window.googleMapsLoaded = false; window.googleMapsError = false;
+    // Google calls this when Maps auth/billing fails — flag it so the app can
+    // tell users the address search is unavailable and to type manually.
+    window.gm_authFailure = function () { window.googleMapsError = true; };
+  </script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCDCVnaHaaRmOMJ1iZQrT2ZA_zQd6nDg-o&libraries=places&callback=Function.prototype" async defer onerror="window.googleMapsError=true"></script>
 
   <!-- React + ReactDOM -->
@@ -1955,9 +1959,21 @@ function LocationInput({
   const acRef = useRef(null);
   const onChangeRef = useRef(onChange);
   const [local, setLocal] = useState(value || '');
+  const [mapsDown, setMapsDown] = useState(false);
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+  useEffect(() => {
+    const check = () => {
+      if (typeof window !== 'undefined' && window.googleMapsError) setMapsDown(true);
+    };
+    const t1 = setTimeout(check, 1500);
+    const t2 = setTimeout(check, 4000);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, []);
   useEffect(() => {
     if (value !== undefined && value !== local) setLocal(value || '');
   }, [value]);
@@ -2038,7 +2054,14 @@ function LocationInput({
       outline: 'none'
     },
     autoComplete: "off"
-  })));
+  })), mapsDown && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '12px',
+      color: 'var(--text3)',
+      marginTop: '6px',
+      lineHeight: '1.4'
+    }
+  }, "📍 Address search is unavailable right now — just type the full address."));
 }
 
 // ==================== MAP MODAL ====================
@@ -5466,61 +5489,93 @@ function EventDetailScreen({
       }).catch(() => {});
     }
   }, [event === null || event === void 0 || (_event$locationCoords3 = event.locationCoords) === null || _event$locationCoords3 === void 0 ? void 0 : _event$locationCoords3.lat, event === null || event === void 0 || (_event$locationCoords4 = event.locationCoords) === null || _event$locationCoords4 === void 0 ? void 0 : _event$locationCoords4.lng, event === null || event === void 0 ? void 0 : event.location, event === null || event === void 0 ? void 0 : event.dateTime]);
+  // RSVP / waitlist mutations run in a transaction so concurrent updates
+  // can't clobber each other (fixes RSVPs silently disappearing).
   const handleRSVP = async action => {
     if (!currentUser || !event) return;
-    const rsvps = event.rsvps || [];
-    const waitlist = event.waitlist || [];
     const myInfo = {
       oderId: currentUser.uid,
       userName: `${(userProfile === null || userProfile === void 0 ? void 0 : userProfile.firstName) || ''} ${(userProfile === null || userProfile === void 0 ? void 0 : userProfile.lastName) || ''}`.trim(),
       firstName: (userProfile === null || userProfile === void 0 ? void 0 : userProfile.firstName) || '',
       photoURL: (userProfile === null || userProfile === void 0 ? void 0 : userProfile.photoURL) || ''
     };
-    if (action === 'join') {
-      const exists = rsvps.findIndex(r => r.oderId === currentUser.uid);
-      const newRsvps = exists >= 0 ? rsvps.map((r, i) => i === exists ? {
-        ...r,
-        status: 'going'
-      } : r) : [...rsvps, {
-        ...myInfo,
-        status: 'going',
-        isHost: false
-      }];
-      await db.collection('events').doc(eventId).update({
-        rsvps: newRsvps,
-        waitlist: waitlist.filter(r => r.oderId !== currentUser.uid)
+    const ref = db.collection('events').doc(eventId);
+    try {
+      await db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return;
+        const data = snap.data();
+        const rsvps = data.rsvps || [];
+        const waitlist = data.waitlist || [];
+        if (action === 'join') {
+          const exists = rsvps.findIndex(r => r.oderId === currentUser.uid);
+          const newRsvps = exists >= 0 ? rsvps.map((r, i) => i === exists ? {
+            ...r,
+            status: 'going'
+          } : r) : [...rsvps, {
+            ...myInfo,
+            status: 'going',
+            isHost: false
+          }];
+          tx.update(ref, {
+            rsvps: newRsvps,
+            waitlist: waitlist.filter(r => r.oderId !== currentUser.uid)
+          });
+        } else if (action === 'waitlist') {
+          if (waitlist.some(r => r.oderId === currentUser.uid)) return;
+          tx.update(ref, {
+            waitlist: [...waitlist, {
+              ...myInfo,
+              requestedAt: new Date().toISOString()
+            }]
+          });
+        } else if (action === 'leave') {
+          tx.update(ref, {
+            rsvps: rsvps.filter(r => r.oderId !== currentUser.uid),
+            waitlist: waitlist.filter(r => r.oderId !== currentUser.uid)
+          });
+        }
       });
-    } else if (action === 'waitlist') {
-      if (waitlist.some(r => r.oderId === currentUser.uid)) return;
-      await db.collection('events').doc(eventId).update({
-        waitlist: [...waitlist, {
-          ...myInfo,
-          requestedAt: new Date().toISOString()
-        }]
-      });
-    } else if (action === 'leave') {
-      await db.collection('events').doc(eventId).update({
-        rsvps: rsvps.filter(r => r.oderId !== currentUser.uid),
-        waitlist: waitlist.filter(r => r.oderId !== currentUser.uid)
-      });
+    } catch (e) {
+      console.error('RSVP error:', e);
     }
   };
   const approveWaitlist = async uid => {
-    const person = (event.waitlist || []).find(r => r.oderId === uid);
-    if (!person) return;
-    await db.collection('events').doc(eventId).update({
-      waitlist: (event.waitlist || []).filter(r => r.oderId !== uid),
-      rsvps: [...(event.rsvps || []), {
-        ...person,
-        status: 'going',
-        isHost: false
-      }]
-    });
+    const ref = db.collection('events').doc(eventId);
+    try {
+      await db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return;
+        const data = snap.data();
+        const waitlist = data.waitlist || [];
+        const person = waitlist.find(r => r.oderId === uid);
+        if (!person) return;
+        tx.update(ref, {
+          waitlist: waitlist.filter(r => r.oderId !== uid),
+          rsvps: [...(data.rsvps || []), {
+            ...person,
+            status: 'going',
+            isHost: false
+          }]
+        });
+      });
+    } catch (e) {
+      console.error('Approve waitlist error:', e);
+    }
   };
   const denyWaitlist = async uid => {
-    await db.collection('events').doc(eventId).update({
-      waitlist: (event.waitlist || []).filter(r => r.oderId !== uid)
-    });
+    const ref = db.collection('events').doc(eventId);
+    try {
+      await db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return;
+        tx.update(ref, {
+          waitlist: (snap.data().waitlist || []).filter(r => r.oderId !== uid)
+        });
+      });
+    } catch (e) {
+      console.error('Deny waitlist error:', e);
+    }
   };
 
   // Add to Calendar (builds .ics download)
@@ -5646,17 +5701,8 @@ function EventDetailScreen({
       if (editEventForm.ampm === 'PM' && h !== 12) h += 12;
       if (editEventForm.ampm === 'AM' && h === 12) h = 0;
       dt.setHours(h, parseInt(editEventForm.minute), 0, 0);
-      // Merge invitedPlayers into rsvps (keep existing host/going rsvps, add/update invited)
-      const existingRsvps = event.rsvps || [];
-      const hostRsvps = existingRsvps.filter(r => r.isHost || r.status === 'going');
-      const newInviteRsvps = editEventForm.invitedPlayers.filter(u => !hostRsvps.some(r => r.oderId === u.id)).map(u => ({
-        oderId: u.id,
-        userName: `${u.firstName || ''} ${u.lastName || ''}`.trim(),
-        firstName: u.firstName || '',
-        status: 'invited',
-        photoURL: u.photoURL || ''
-      }));
-      await db.collection('events').doc(eventId).update({
+      const editRef = db.collection('events').doc(eventId);
+      const editFields = {
         title: editEventForm.title.trim(),
         location: editEventForm.location.trim(),
         locationCoords: editEventForm.locationCoords || null,
@@ -5666,9 +5712,26 @@ function EventDetailScreen({
         allowWaitlist: editEventForm.allowWaitlist,
         coachId: ((_editEventForm$coach = editEventForm.coach) === null || _editEventForm$coach === void 0 ? void 0 : _editEventForm$coach.id) || null,
         coachName: editEventForm.coach ? `${editEventForm.coach.firstName} ${editEventForm.coach.lastName}`.trim() : '',
-        rsvps: [...hostRsvps, ...newInviteRsvps],
         dateTime: firebase.firestore.Timestamp.fromDate(dt),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      // Read rsvps fresh inside a transaction so editing can't wipe anyone who
+      // RSVPed while the edit modal was open (keep host/going, re-add invited).
+      await db.runTransaction(async tx => {
+        const snap = await tx.get(editRef);
+        const existingRsvps = (snap.exists ? snap.data().rsvps : null) || [];
+        const hostRsvps = existingRsvps.filter(r => r.isHost || r.status === 'going');
+        const newInviteRsvps = editEventForm.invitedPlayers.filter(u => !hostRsvps.some(r => r.oderId === u.id)).map(u => ({
+          oderId: u.id,
+          userName: `${u.firstName || ''} ${u.lastName || ''}`.trim(),
+          firstName: u.firstName || '',
+          status: 'invited',
+          photoURL: u.photoURL || ''
+        }));
+        tx.update(editRef, {
+          ...editFields,
+          rsvps: [...hostRsvps, ...newInviteRsvps]
+        });
       });
       setShowEditEvent(false);
     } catch (e) {
