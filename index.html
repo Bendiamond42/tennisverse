@@ -3364,7 +3364,7 @@ function InstantGameModal({
       zIndex: 300,
       background: 'var(--bg)',
       overflowY: 'auto',
-      paddingBottom: '200px'
+      paddingBottom: 'calc(175px + env(safe-area-inset-bottom, 0px))'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -3625,23 +3625,24 @@ function InstantGameModal({
       marginBottom: '14px'
     }
   }, "＋ Add player by name (not on app)")),
-  // floating CTA — pinned ABOVE the tab bar (nav is zIndex 1000 with an
-  // opaque background, so anything at bottom:0 below that is invisible)
+  // CTA bar — opaque, sitting on top of the tab bar's slot but under its
+  // z-plane (999 < nav 1000), so the roster scrolls BEHIND it and is hidden
+  // rather than showing through around a floating button.
   /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'fixed',
       left: 0,
       right: 0,
-      bottom: 'calc(90px + env(safe-area-inset-bottom, 0px))',
-      padding: '0 20px',
-      zIndex: 1001,
-      pointerEvents: 'none'
+      bottom: 0,
+      background: 'var(--bg)',
+      borderTop: '1px solid var(--border)',
+      padding: '12px 20px calc(78px + env(safe-area-inset-bottom, 0px))',
+      zIndex: 999
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => canStart && startGame(),
     disabled: !canStart || loading,
     style: {
-      pointerEvents: 'auto',
       display: 'block',
       width: '100%',
       maxWidth: '460px',
@@ -3653,7 +3654,6 @@ function InstantGameModal({
       color: canStart && !loading ? 'var(--accent-ink)' : 'var(--text3)',
       font: "700 15px 'DM Sans', sans-serif",
       cursor: canStart && !loading ? 'pointer' : 'default',
-      boxShadow: '0 10px 30px rgba(8,12,19,.6)',
       transition: 'all .15s'
     }
   }, loading ? '…' : canStart ? `Start game · ${total} players` : 'Pick at least 4 players')));
