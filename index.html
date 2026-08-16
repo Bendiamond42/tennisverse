@@ -4274,9 +4274,18 @@ function CreateEventScreen({
     repeat: 'Does not repeat'
   });
   const notesRef = useRef(null);
-  const [sheet, setSheet] = useState(null); // 'date' | 'time' | 'repeat'
+  const [sheet, setSheet] = useState(null); // 'date' | 'time' | 'repeat' | 'custom'
   const [timeTarget, setTimeTarget] = useState('start');
   const [calMonth, setCalMonth] = useState(null);
+  // custom recurrence
+  const [custEvery, setCustEvery] = useState(1);
+  const [custUnit, setCustUnit] = useState('week');
+  const [custDays, setCustDays] = useState([]);
+  const [custEnd, setCustEnd] = useState('never');
+  const [custAfter, setCustAfter] = useState(10);
+  // post-publish confirmation
+  const [published, setPublished] = useState(null); // { id }
+  const [copied, setCopied] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [manualCoachName, setManualCoachName] = useState('');
@@ -4509,7 +4518,9 @@ function CreateEventScreen({
         waitlist: [],
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
-      onCreated(docRef.id);
+      setPublished({
+        id: docRef.id
+      });
     } catch (e) {
       setError('Failed to create game');
     } finally {
@@ -4647,6 +4658,424 @@ function CreateEventScreen({
   })();
   const sameDay = (a, b) => a && b && a.toDateString() === b.toDateString();
   const todayD = new Date();
+  // ── Game published confirmation (design 6b) ───────────────
+  const syncInvitesToDoc = async () => {
+    if (!published) return;
+    try {
+      await db.runTransaction(async tx => {
+        const ref = db.collection('events').doc(published.id);
+        const snap = await tx.get(ref);
+        if (!snap.exists) return;
+        const rsvps = snap.data().rsvps || [];
+        const additions = form.invitedPlayers.filter(u => !rsvps.some(r => r.oderId === u.id)).map(u => ({
+          oderId: u.id,
+          userName: `${u.firstName || ''} ${u.lastName || ''}`.trim(),
+          firstName: u.firstName || '',
+          status: u.manual ? 'going' : 'invited',
+          isManual: !!u.manual,
+          email: u.email || '',
+          photoURL: u.photoURL || ''
+        }));
+        if (additions.length) tx.update(ref, {
+          rsvps: [...rsvps, ...additions]
+        });
+      });
+    } catch (e) {
+      console.error('Sync invites error:', e);
+    }
+  };
+  if (published) {
+    const joinLink = `${window.location.origin}${window.location.pathname}#/events/${published.id}`;
+    const shortLink = `tennisverse.net/g/${published.id.slice(0, 8)}`;
+    const dt = getDateTime();
+    const copyLink = () => {
+      try {
+        navigator.clipboard.writeText(joinLink);
+      } catch (e) {}
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    };
+    const shareBody = `Join me for ${form.title.trim()} — ${joinLink}`;
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        minHeight: '100vh',
+        background: 'var(--bg)',
+        paddingBottom: '120px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        maxWidth: '500px',
+        margin: '0 auto',
+        padding: '54px 20px 0',
+        textAlign: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: '64px',
+        height: '64px',
+        margin: '0 auto 20px',
+        borderRadius: '99px',
+        background: 'rgba(79,229,138,.14)',
+        border: '1px solid rgba(79,229,138,.35)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        animation: 'tvpulse 2.6s infinite'
+      }
+    }, /*#__PURE__*/React.createElement(I, {
+      n: "Check",
+      s: 28,
+      c: "var(--accent)"
+    })), /*#__PURE__*/React.createElement("h1", {
+      style: {
+        margin: '0 0 10px',
+        font: "800 27px/1 'DM Sans', sans-serif",
+        letterSpacing: '-0.035em',
+        color: 'var(--text)'
+      }
+    }, "Game published"), /*#__PURE__*/React.createElement("p", {
+      style: {
+        margin: '0 0 26px',
+        font: "400 14px/1.5 'DM Sans', sans-serif",
+        color: 'var(--text2)'
+      }
+    }, form.isPrivate ? `${form.invitedPlayers.length} player${form.invitedPlayers.length === 1 ? ' was' : 's were'} invited. They'll get a notification.` : `Open to anyone nearby${form.hasMaxPlayers ? `, up to ${form.maxPlayers} players` : ''}.`),
+    // recap card
+    /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'left',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: '16px',
+        padding: '16px',
+        marginBottom: '14px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "mono",
+      style: {
+        font: "500 11px/1 var(--mono)",
+        letterSpacing: '.14em',
+        textTransform: 'uppercase',
+        color: 'var(--accent)',
+        marginBottom: '8px'
+      }
+    }, dt.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
+    }), " \xB7 ", dt.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit'
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        font: "700 17px/1.2 'DM Sans', sans-serif",
+        letterSpacing: '-0.02em',
+        color: 'var(--text)',
+        marginBottom: '4px'
+      }
+    }, form.title.trim()), /*#__PURE__*/React.createElement("div", {
+      style: {
+        font: "400 13px/1.4 'DM Sans', sans-serif",
+        color: 'var(--text2)'
+      }
+    }, form.location.trim(), " \xB7 King's Court", form.hasMaxPlayers ? ` · up to ${form.maxPlayers} players` : '', form.repeat && form.repeat !== 'Does not repeat' ? ` · ${form.repeat}` : '')),
+    // join link row
+    /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        background: 'var(--surface)',
+        border: `1px solid ${copied ? 'var(--accent-edge)' : 'var(--border)'}`,
+        borderRadius: '14px',
+        padding: '8px 8px 8px 14px',
+        marginBottom: '14px',
+        transition: 'border-color .2s'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "mono",
+      style: {
+        flex: 1,
+        minWidth: 0,
+        textAlign: 'left',
+        font: "400 13px var(--mono)",
+        color: 'var(--text2)',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, shortLink), /*#__PURE__*/React.createElement("button", {
+      onClick: copyLink,
+      style: {
+        flex: 'none',
+        height: '38px',
+        padding: '0 16px',
+        borderRadius: '10px',
+        border: 'none',
+        cursor: 'pointer',
+        background: copied ? 'rgba(79,229,138,.16)' : 'var(--surface2)',
+        color: copied ? 'var(--accent)' : 'var(--text)',
+        font: "600 13px 'DM Sans', sans-serif",
+        transition: 'all .15s'
+      }
+    }, copied ? 'Copied' : 'Copy')),
+    // share tiles
+    /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr 1fr',
+        gap: '10px',
+        marginBottom: '26px'
+      }
+    }, [{
+      label: 'Text',
+      icon: 'MessageCircle',
+      go: () => {
+        window.location.href = `sms:?&body=${encodeURIComponent(shareBody)}`;
+      }
+    }, {
+      label: 'Email',
+      icon: 'Send',
+      go: () => {
+        window.location.href = `mailto:?subject=${encodeURIComponent(form.title.trim())}&body=${encodeURIComponent(shareBody)}`;
+      }
+    }, {
+      label: 'More',
+      icon: 'Share',
+      go: () => {
+        if (navigator.share) navigator.share({
+          title: form.title.trim(),
+          url: joinLink
+        }).catch(() => {});else copyLink();
+      }
+    }].map(tile => /*#__PURE__*/React.createElement("button", {
+      key: tile.label,
+      onClick: tile.go,
+      style: {
+        height: '72px',
+        borderRadius: '14px',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        color: 'var(--text2)',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        font: "600 12px 'DM Sans', sans-serif"
+      }
+    }, /*#__PURE__*/React.createElement(I, {
+      n: tile.icon,
+      s: 18,
+      c: "var(--accent)"
+    }), tile.label))),
+    // invited
+    form.isPrivate && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '12px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "eyebrow"
+    }, "Invited"), /*#__PURE__*/React.createElement("span", {
+      onClick: () => setShowInvitePicker(true),
+      style: {
+        font: "600 13px/1 'DM Sans', sans-serif",
+        color: 'var(--accent)',
+        cursor: 'pointer'
+      }
+    }, "Invite more")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '8px',
+        marginBottom: '20px'
+      }
+    }, form.invitedPlayers.slice(0, 7).map(u => /*#__PURE__*/React.createElement("div", {
+      key: u.id,
+      style: {
+        height: '38px',
+        padding: '0 12px 0 5px',
+        borderRadius: '99px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)'
+      }
+    }, /*#__PURE__*/React.createElement(Avatar, {
+      src: u.photoURL,
+      name: `${u.firstName || ''} ${u.lastName || ''}`,
+      size: 28
+    }), /*#__PURE__*/React.createElement("span", {
+      style: {
+        font: "600 12px 'DM Sans', sans-serif",
+        color: 'var(--text)'
+      }
+    }, u.firstName))), form.invitedPlayers.length > 7 && /*#__PURE__*/React.createElement("div", {
+      className: "mono",
+      style: {
+        height: '38px',
+        padding: '0 12px',
+        borderRadius: '99px',
+        display: 'flex',
+        alignItems: 'center',
+        background: 'var(--surface2)',
+        border: '1px solid var(--border)',
+        font: "400 12px var(--mono)",
+        color: 'var(--text2)'
+      }
+    }, "+", form.invitedPlayers.length - 7), /*#__PURE__*/React.createElement("button", {
+      onClick: () => setShowInvitePicker(true),
+      style: {
+        height: '38px',
+        padding: '0 14px',
+        borderRadius: '99px',
+        background: 'transparent',
+        border: '1px dashed var(--accent-edge)',
+        color: 'var(--accent)',
+        font: "600 12px 'DM Sans', sans-serif",
+        cursor: 'pointer'
+      }
+    }, "＋ Add")))),
+    // footer
+    /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(8,12,19,.92)',
+        backdropFilter: 'blur(14px)',
+        borderTop: '1px solid var(--border)',
+        padding: '14px 20px 30px',
+        display: 'flex',
+        gap: '10px',
+        zIndex: 100
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => onCreated(published.id),
+      style: {
+        flex: 1,
+        height: '56px',
+        borderRadius: '16px',
+        background: 'var(--surface2)',
+        border: '1px solid rgba(255,255,255,.1)',
+        color: 'var(--text)',
+        font: "700 15px 'DM Sans', sans-serif",
+        cursor: 'pointer'
+      }
+    }, "View game"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => onCreated(published.id),
+      style: {
+        flex: 1,
+        height: '56px',
+        borderRadius: '16px',
+        border: 'none',
+        background: 'var(--accent)',
+        color: 'var(--accent-ink)',
+        font: "700 15px 'DM Sans', sans-serif",
+        cursor: 'pointer'
+      }
+    }, "Start now")), showInvitePicker && /*#__PURE__*/React.createElement(HostSheet, {
+      onClose: () => {
+        setShowInvitePicker(false);
+        syncInvitesToDoc();
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        font: "700 17px 'DM Sans', sans-serif",
+        letterSpacing: '-0.02em',
+        color: 'var(--text)',
+        textAlign: 'center',
+        marginBottom: '14px'
+      }
+    }, "Invite players"), /*#__PURE__*/React.createElement("input", {
+      value: inviteSearch,
+      onChange: e => setInviteSearch(e.target.value),
+      placeholder: "Search players…",
+      style: {
+        width: '100%',
+        height: '46px',
+        boxSizing: 'border-box',
+        padding: '0 14px',
+        borderRadius: '12px',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        color: 'var(--text)',
+        font: "500 14px 'DM Sans', sans-serif",
+        outline: 'none',
+        marginBottom: '10px'
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        maxHeight: '34vh',
+        overflowY: 'auto',
+        marginBottom: '12px',
+        textAlign: 'left'
+      }
+    }, allUsers.filter(u => `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase().includes(inviteSearch.toLowerCase())).slice(0, 30).map(u => {
+      const on = form.invitedPlayers.some(pp => pp.id === u.id);
+      return /*#__PURE__*/React.createElement("div", {
+        key: u.id,
+        onClick: () => toggleInvite(u),
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: '11px',
+          height: '48px',
+          padding: '0 10px',
+          borderRadius: '11px',
+          cursor: 'pointer',
+          background: on ? 'rgba(79,229,138,.07)' : 'transparent'
+        }
+      }, /*#__PURE__*/React.createElement(Avatar, {
+        src: u.photoURL,
+        name: `${u.firstName || ''} ${u.lastName || ''}`,
+        size: 32
+      }), /*#__PURE__*/React.createElement("span", {
+        style: {
+          flex: 1,
+          font: "600 14px 'DM Sans', sans-serif",
+          color: 'var(--text)'
+        }
+      }, `${u.firstName || ''} ${u.lastName || ''}`.trim()), /*#__PURE__*/React.createElement("div", {
+        style: {
+          width: '24px',
+          height: '24px',
+          borderRadius: '99px',
+          flex: 'none',
+          background: on ? 'var(--accent)' : 'transparent',
+          border: `1px solid ${on ? 'var(--accent)' : 'var(--border2)'}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }
+      }, on && /*#__PURE__*/React.createElement(I, {
+        n: "Check",
+        s: 13,
+        c: "var(--accent-ink)"
+      })));
+    })), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        setShowInvitePicker(false);
+        syncInvitesToDoc();
+      },
+      style: {
+        width: '100%',
+        height: '52px',
+        borderRadius: '14px',
+        border: 'none',
+        background: 'var(--accent)',
+        color: 'var(--accent-ink)',
+        font: "700 15px 'DM Sans', sans-serif",
+        cursor: 'pointer'
+      }
+    }, "Invite ", form.invitedPlayers.length, " player", form.invitedPlayers.length === 1 ? '' : 's')));
+  }
   return /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: '100vh',
@@ -5322,11 +5751,19 @@ function CreateEventScreen({
       textAlign: 'center',
       marginBottom: '14px'
     }
-  }, "Repeats"), REPEATS.map(rp => {
-    const on = (form.repeat || REPEATS[0]) === rp;
+  }, "Repeats"), [...REPEATS, 'Custom…'].map(rp => {
+    const isCustom = rp === 'Custom…';
+    // Custom… reads as active when a custom rule is applied ("Every …")
+    const on = isCustom ? (form.repeat || '').indexOf('Every ') === 0 && !REPEATS.includes(form.repeat) : (form.repeat || REPEATS[0]) === rp;
     return /*#__PURE__*/React.createElement("button", {
       key: rp,
       onClick: () => {
+        if (isCustom) {
+          // seed the weekday selector with the picked date's day
+          setCustDays(d => d.length ? d : [(form.date instanceof Date ? form.date : new Date()).getDay()]);
+          setSheet('custom');
+          return;
+        }
         setForm(f => ({
           ...f,
           repeat: rp
@@ -5352,7 +5789,322 @@ function CreateEventScreen({
       s: 16,
       c: "var(--accent)"
     }));
-  })), showInvitePicker && /*#__PURE__*/React.createElement(HostSheet, {
+  })),
+  // ── custom recurrence sheet ──
+  sheet === 'custom' && (() => {
+    const unitLabel = (n, u) => u + (n > 1 ? 's' : '');
+    const dayLetters = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const baseDate = form.date instanceof Date ? form.date : new Date();
+    const endD = new Date(baseDate);
+    endD.setDate(endD.getDate() + 91);
+    const endDateLabel = endD.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+    const summary = 'Every ' + (custEvery > 1 ? custEvery + ' ' : '') + unitLabel(custEvery, custUnit) + (custUnit === 'week' && custDays.length ? ' on ' + [...custDays].sort().map(i => dayLetters[i]).join(', ') : '') + (custEnd === 'after' ? `, ${custAfter} times` : custEnd === 'on' ? `, until ${endDateLabel}` : '');
+    const Radio = on => /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: '22px',
+        height: '22px',
+        flex: 'none',
+        borderRadius: '99px',
+        border: `2px solid ${on ? 'var(--accent)' : '#3a465c'}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: '11px',
+        height: '11px',
+        borderRadius: '99px',
+        background: on ? 'var(--accent)' : 'transparent'
+      }
+    }));
+    const Stepper = (up, down) => /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '2px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      onClick: up,
+      style: {
+        width: '26px',
+        height: '18px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer'
+      }
+    }, /*#__PURE__*/React.createElement(I, {
+      n: "ChevronDown",
+      s: 12,
+      c: "var(--text2)",
+      style: {
+        transform: 'rotate(180deg)'
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      onClick: down,
+      style: {
+        width: '26px',
+        height: '18px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer'
+      }
+    }, /*#__PURE__*/React.createElement(I, {
+      n: "ChevronDown",
+      s: 12,
+      c: "var(--text2)"
+    })));
+    return /*#__PURE__*/React.createElement(HostSheet, {
+      onClose: () => setSheet(null)
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        font: "800 22px/1 'DM Sans', sans-serif",
+        letterSpacing: '-0.03em',
+        color: 'var(--text)',
+        marginBottom: '22px'
+      }
+    }, "Custom recurrence"),
+    // Repeat every N [unit]
+    /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        marginBottom: '24px'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        font: "500 14px/1 'DM Sans', sans-serif",
+        color: 'var(--text2)',
+        flex: 'none'
+      }
+    }, "Repeat every"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        background: 'var(--surface)',
+        border: '1px solid rgba(255,255,255,.08)',
+        borderRadius: '13px',
+        padding: '0 6px 0 14px',
+        height: '46px',
+        flex: 'none'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "mono",
+      style: {
+        font: "400 16px/1 var(--mono)",
+        color: 'var(--text)',
+        minWidth: '20px',
+        textAlign: 'center'
+      }
+    }, custEvery), Stepper(() => setCustEvery(v => Math.min(99, v + 1)), () => setCustEvery(v => Math.max(1, v - 1)))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: '6px',
+        flex: 1
+      }
+    }, ['day', 'week', 'month'].map(u => /*#__PURE__*/React.createElement("button", {
+      key: u,
+      onClick: () => setCustUnit(u),
+      style: {
+        flex: 1,
+        height: '42px',
+        borderRadius: '11px',
+        cursor: 'pointer',
+        font: "600 13px 'DM Sans', sans-serif",
+        background: custUnit === u ? 'var(--accent3)' : 'var(--surface)',
+        border: `1px solid ${custUnit === u ? 'var(--accent-edge)' : 'rgba(255,255,255,.08)'}`,
+        color: custUnit === u ? 'var(--accent)' : 'var(--text2)',
+        transition: 'all .15s'
+      }
+    }, unitLabel(custEvery, u))))),
+    // Repeat on (weekly only)
+    custUnit === 'week' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        font: "500 14px/1 'DM Sans', sans-serif",
+        color: 'var(--text2)',
+        marginBottom: '12px'
+      }
+    }, "Repeat on"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: '7px',
+        marginBottom: '24px'
+      }
+    }, ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label, i) => {
+      const on = custDays.includes(i);
+      return /*#__PURE__*/React.createElement("button", {
+        key: i,
+        onClick: () => setCustDays(d => on ? d.filter(x => x !== i) : [...d, i]),
+        style: {
+          flex: 1,
+          height: '40px',
+          borderRadius: '99px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          font: "600 12px 'DM Sans', sans-serif",
+          background: on ? 'var(--accent)' : 'var(--surface)',
+          border: `1px solid ${on ? 'var(--accent)' : 'rgba(255,255,255,.08)'}`,
+          color: on ? 'var(--accent-ink)' : 'var(--text2)',
+          transition: 'all .15s'
+        }
+      }, label);
+    }))),
+    // Ends
+    /*#__PURE__*/React.createElement("div", {
+      style: {
+        font: "500 14px/1 'DM Sans', sans-serif",
+        color: 'var(--text2)',
+        marginBottom: '12px'
+      }
+    }, "Ends"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        marginBottom: '22px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      onClick: () => setCustEnd('never'),
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '13px',
+        cursor: 'pointer',
+        minHeight: '44px'
+      }
+    }, Radio(custEnd === 'never'), /*#__PURE__*/React.createElement("span", {
+      style: {
+        font: "500 15px/1 'DM Sans', sans-serif",
+        color: 'var(--text)'
+      }
+    }, "Never")), /*#__PURE__*/React.createElement("div", {
+      onClick: () => setCustEnd('on'),
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '13px',
+        cursor: 'pointer',
+        minHeight: '44px'
+      }
+    }, Radio(custEnd === 'on'), /*#__PURE__*/React.createElement("span", {
+      style: {
+        font: "500 15px/1 'DM Sans', sans-serif",
+        color: 'var(--text)'
+      }
+    }, "On"), /*#__PURE__*/React.createElement("span", {
+      className: "mono",
+      style: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        height: '42px',
+        padding: '0 11px',
+        borderRadius: '11px',
+        font: "500 13px var(--mono)",
+        background: custEnd === 'on' ? 'rgba(79,229,138,.14)' : 'var(--surface)',
+        border: `1px solid ${custEnd === 'on' ? 'rgba(79,229,138,.5)' : 'rgba(255,255,255,.08)'}`,
+        color: custEnd === 'on' ? 'var(--accent)' : 'var(--text)'
+      }
+    }, endDateLabel)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '13px',
+        minHeight: '44px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      onClick: () => setCustEnd('after'),
+      style: {
+        display: 'contents',
+        cursor: 'pointer'
+      }
+    }, Radio(custEnd === 'after')), /*#__PURE__*/React.createElement("span", {
+      onClick: () => setCustEnd('after'),
+      style: {
+        font: "500 15px/1 'DM Sans', sans-serif",
+        color: 'var(--text)',
+        cursor: 'pointer'
+      }
+    }, "After"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        background: custEnd === 'after' ? 'rgba(79,229,138,.14)' : 'var(--surface)',
+        border: `1px solid ${custEnd === 'after' ? 'rgba(79,229,138,.5)' : 'rgba(255,255,255,.08)'}`,
+        borderRadius: '13px',
+        padding: '0 6px 0 12px',
+        height: '46px',
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "mono",
+      style: {
+        font: "400 15px/1 var(--mono)",
+        color: 'var(--text)',
+        minWidth: '22px',
+        textAlign: 'center'
+      }
+    }, custAfter), /*#__PURE__*/React.createElement("span", {
+      style: {
+        font: "400 13px/1 'DM Sans', sans-serif",
+        color: 'var(--text3)',
+        flex: 1
+      }
+    }, "occurrences"), Stepper(() => setCustAfter(v => Math.min(99, v + 1)), () => setCustAfter(v => Math.max(2, v - 1)))))),
+    // summary + actions
+    /*#__PURE__*/React.createElement("div", {
+      style: {
+        font: "400 12px/1.5 'DM Sans', sans-serif",
+        color: 'var(--text3)',
+        marginBottom: '18px'
+      }
+    }, summary), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: '10px'
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => setSheet(null),
+      style: {
+        flex: 1,
+        height: '54px',
+        borderRadius: '16px',
+        background: 'var(--surface2)',
+        border: '1px solid rgba(255,255,255,.1)',
+        color: 'var(--text)',
+        font: "700 15px 'DM Sans', sans-serif",
+        cursor: 'pointer'
+      }
+    }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        setForm(f => ({
+          ...f,
+          repeat: summary
+        }));
+        setSheet(null);
+      },
+      style: {
+        flex: 1,
+        height: '54px',
+        borderRadius: '16px',
+        border: 'none',
+        background: 'var(--accent)',
+        color: 'var(--accent-ink)',
+        font: "700 15px 'DM Sans', sans-serif",
+        cursor: 'pointer'
+      }
+    }, "Done")));
+  })(), showInvitePicker && /*#__PURE__*/React.createElement(HostSheet, {
     onClose: () => setShowInvitePicker(false)
   }, /*#__PURE__*/React.createElement("div", {
     style: {
