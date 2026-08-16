@@ -3632,7 +3632,7 @@ function InstantGameModal({
       position: 'fixed',
       left: 0,
       right: 0,
-      bottom: '86px',
+      bottom: 'calc(90px + env(safe-area-inset-bottom, 0px))',
       padding: '0 20px',
       zIndex: 1001,
       pointerEvents: 'none'
@@ -4109,9 +4109,9 @@ function EventsScreen({
       position: 'fixed',
       left: 0,
       right: 0,
-      bottom: '78px',
+      bottom: 'calc(90px + env(safe-area-inset-bottom, 0px))',
       padding: '0 20px',
-      zIndex: 90,
+      zIndex: 1001,
       pointerEvents: 'none'
     }
   }, /*#__PURE__*/React.createElement("button", {
@@ -4257,7 +4257,9 @@ function CreateEventScreen({
   now.setHours(now.getHours() + 1, 0, 0, 0);
   const initHour = now.getHours() === 0 ? 12 : now.getHours() > 12 ? now.getHours() - 12 : now.getHours();
   const [form, setForm] = useState({
-    title: '',
+    title: now.toLocaleDateString('en-US', {
+      weekday: 'long'
+    }) + ' DTC',
     location: '',
     locationCoords: null,
     date: now,
@@ -5140,7 +5142,7 @@ function CreateEventScreen({
       ...f,
       title: e.target.value
     })),
-    placeholder: "Riverside Bowl",
+    placeholder: "Sunday DTC",
     style: {
       width: '100%',
       boxSizing: 'border-box',
