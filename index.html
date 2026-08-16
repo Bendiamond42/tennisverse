@@ -83,6 +83,19 @@
     @keyframes tvpulse { 0%,100% { box-shadow:0 0 0 0 rgba(79,229,138,0); } 50% { box-shadow:0 0 0 7px rgba(79,229,138,0.10); } }
     @keyframes tvglow { 0%,100% { box-shadow:0 0 0 0 rgba(79,229,138,0.45); } 50% { box-shadow:0 0 0 10px rgba(79,229,138,0); } }
     @keyframes tvin { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    /* Flying tennis balls (sign in). Each ball gets its OWN keyframe whose
+       endpoints are computed from its anchor, so both ends sit fully outside
+       the frame — a shared keyframe parks some balls off-screen. Here the
+       viewport IS the phone, so vw/vh resolve correctly. */
+    @keyframes tvball1 { from { transform: translate(calc(-8vw - 106px), 30vh) rotate(0deg); } to { transform: translate(calc(92vw + 60px), -30vh) rotate(1200deg); } }
+    @keyframes tvball2 { from { transform: translate(calc(-74vw - 90px), -20vh) rotate(0deg); } to { transform: translate(calc(26vw + 60px), 25vh) rotate(-900deg); } }
+    @keyframes tvball3 { from { transform: translate(calc(-22vw - 82px), -15vh) rotate(0deg); } to { transform: translate(calc(78vw + 60px), 20vh) rotate(1700deg); } }
+    @keyframes tvball4 { from { transform: translate(calc(-62vw - 98px), 25vh) rotate(0deg); } to { transform: translate(calc(38vw + 60px), -20vh) rotate(-1400deg); } }
+    @keyframes tvball5 { from { transform: translate(calc(-88vw - 78px), -10vh) rotate(0deg); } to { transform: translate(calc(12vw + 60px), 15vh) rotate(620deg); } }
+    @keyframes tvball6 { from { transform: translate(calc(-40vw - 86px), 20vh) rotate(0deg); } to { transform: translate(calc(60vw + 60px), -35vh) rotate(1050deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .tv-ball { animation: none !important; }
+    }
     /* Every numeral is mono — it's what makes the timing read as instrumentation. */
     .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
     .eyebrow { font: 600 11px/1 'DM Sans', sans-serif; letter-spacing: .13em; text-transform: uppercase; color: var(--text3); }
@@ -2376,6 +2389,7 @@ function LoginScreen({
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [authOpen, setAuthOpen] = useState(false); // email sheet
   const handleSubmit = async () => {
     setLoading(true);
     setError('');
@@ -2401,161 +2415,414 @@ function LoginScreen({
       setLoading(false);
     }
   };
+  // ── sign-in sheet ─────────────────────────────────────────
+  const signUp = mode === 'signup';
+  const nameOk = !signUp || (form.firstName || '').trim().length >= 2;
+  const formValid = (form.email || '').includes('@') && (form.password || '').length >= 6 && nameOk;
+  const BALLS = [{
+    left: 8,
+    top: 62,
+    size: 46,
+    dur: 3.4,
+    delay: -0.4
+  }, {
+    left: 74,
+    top: 18,
+    size: 30,
+    dur: 2.8,
+    delay: -1.6
+  }, {
+    left: 22,
+    top: 12,
+    size: 22,
+    dur: 4.2,
+    delay: -0.9
+  }, {
+    left: 62,
+    top: 70,
+    size: 38,
+    dur: 2.2,
+    delay: -2.4
+  }, {
+    left: 88,
+    top: 48,
+    size: 18,
+    dur: 3.9,
+    delay: -1.2
+  }, {
+    left: 40,
+    top: 88,
+    size: 26,
+    dur: 3.1,
+    delay: 0
+  }];
+  const field = (label, key, type, extra) => /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '14px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: '7px'
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      font: "500 10px/1 'DM Sans', sans-serif",
+      letterSpacing: '.11em',
+      textTransform: 'uppercase',
+      color: 'var(--text3)'
+    }
+  }, label), extra), /*#__PURE__*/React.createElement("input", {
+    type: type,
+    value: form[key] || '',
+    onChange: e => setForm(f => ({
+      ...f,
+      [key]: e.target.value
+    })),
+    placeholder: type === 'email' ? 'you@example.com' : type === 'password' ? '••••••••' : 'Your name',
+    style: {
+      width: '100%',
+      height: '52px',
+      boxSizing: 'border-box',
+      padding: '0 15px',
+      borderRadius: '13px',
+      background: 'var(--surface)',
+      border: '1px solid rgba(255,255,255,.09)',
+      color: 'var(--text)',
+      font: "500 15px 'DM Sans', sans-serif",
+      outline: 'none'
+    }
+  }));
   return /*#__PURE__*/React.createElement("div", {
     style: {
+      position: 'relative',
       minHeight: '100vh',
+      boxSizing: 'border-box',
+      overflow: 'hidden',
+      background: 'var(--bg)',
+      padding: '0 24px 40px',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      justifyContent: 'center',
-      padding: '24px',
-      background: 'var(--bg)'
+      justifyContent: 'center'
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  },
+  // ── layer 2: scrim (exactly one) ──
+  /*#__PURE__*/React.createElement("div", {
     style: {
+      position: 'absolute',
+      inset: 0,
+      background: 'linear-gradient(180deg, rgba(8,12,19,.55) 0%, rgba(8,12,19,.35) 34%, rgba(8,12,19,.92) 72%, #080C13 100%)',
+      pointerEvents: 'none'
+    }
+  }),
+  // ── layer 3: green glow ──
+  /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'absolute',
+      inset: 0,
+      background: 'radial-gradient(600px 420px at 50% 8%, rgba(79,229,138,.16), transparent 62%)',
+      pointerEvents: 'none'
+    }
+  }),
+  // ── layer 4: flying tennis balls ──
+  /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'absolute',
+      inset: 0,
+      overflow: 'hidden',
+      pointerEvents: 'none'
+    }
+  }, BALLS.map((b, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    className: "tv-ball",
+    style: {
+      position: 'absolute',
+      left: b.left + '%',
+      top: b.top + '%',
+      width: b.size + 'px',
+      height: b.size + 'px',
+      borderRadius: '99px',
+      overflow: 'hidden',
+      background: 'radial-gradient(circle at 32% 28%, #eaff63 0%, #cbea34 46%, #9ab814 100%)',
+      boxShadow: 'inset -3px -4px 8px rgba(0,0,0,.28), 0 4px 14px rgba(0,0,0,.35)',
+      animation: `tvball${i + 1} ${b.dur}s linear ${b.delay}s infinite`
+    }
+  },
+  // seam: two clipped rings giving the facing curves
+  /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: 'absolute',
       width: '100%',
-      maxWidth: '400px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: 'center',
-      marginBottom: '48px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      margin: '0 auto 20px',
-      display: 'inline-block'
-    }
-  }, /*#__PURE__*/React.createElement(TennisverseLogo, {
-    size: 88
-  })), /*#__PURE__*/React.createElement("h1", {
-    style: {
-      fontSize: '28px',
-      fontWeight: '800',
-      letterSpacing: '-0.03em',
-      margin: '0 0 8px'
-    }
-  }, "Tennisverse"), /*#__PURE__*/React.createElement("p", {
-    style: {
-      color: 'var(--text2)',
-      margin: 0,
-      fontSize: '15px'
-    }
-  }, "The platform for tennis players")), error && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: 'rgba(255,107,107,0.1)',
-      border: '1px solid rgba(255,107,107,0.3)',
-      borderRadius: 'var(--radius2)',
-      padding: '12px 16px',
-      marginBottom: '20px',
-      color: '#FF6B6B',
-      fontSize: '14px'
-    }
-  }, error), mode === 'signup' && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: '12px'
-    }
-  }, /*#__PURE__*/React.createElement(Input, {
-    label: "First Name",
-    value: form.firstName,
-    onChange: e => setForm({
-      ...form,
-      firstName: e.target.value
-    }),
-    placeholder: "First",
-    style: {
-      flex: 1,
-      marginBottom: 0
-    }
-  }), /*#__PURE__*/React.createElement(Input, {
-    label: "Last Name",
-    value: form.lastName,
-    onChange: e => setForm({
-      ...form,
-      lastName: e.target.value
-    }),
-    placeholder: "Last",
-    style: {
-      flex: 1,
-      marginBottom: 0
-    }
-  })), /*#__PURE__*/React.createElement(Input, {
-    label: "Email",
-    type: "email",
-    value: form.email,
-    onChange: e => setForm({
-      ...form,
-      email: e.target.value
-    }),
-    onKeyDown: e => e.key === 'Enter' && handleSubmit(),
-    placeholder: "you@example.com"
-  }), /*#__PURE__*/React.createElement(Input, {
-    label: "Password",
-    type: "password",
-    value: form.password,
-    onChange: e => setForm({
-      ...form,
-      password: e.target.value
-    }),
-    onKeyDown: e => e.key === 'Enter' && handleSubmit(),
-    placeholder: "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
-  }), /*#__PURE__*/React.createElement(Btn, {
-    onClick: handleSubmit,
-    disabled: loading,
-    size: "lg",
-    style: {
-      marginBottom: '12px'
-    }
-  }, loading ? '...' : mode === 'login' ? 'Sign in' : 'Create account'), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-      margin: '16px 0'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1,
-      height: '1px',
-      background: 'var(--border)'
+      height: '84%',
+      top: '8%',
+      left: '-46%',
+      borderRadius: '99px',
+      border: `${b.size > 30 ? 2 : 1.3}px solid rgba(255,255,255,.9)`,
+      borderLeftColor: 'transparent',
+      borderTopColor: 'transparent'
     }
   }), /*#__PURE__*/React.createElement("span", {
     style: {
-      color: 'var(--text3)',
-      fontSize: '13px'
+      position: 'absolute',
+      width: '100%',
+      height: '84%',
+      top: '8%',
+      right: '-46%',
+      borderRadius: '99px',
+      border: `${b.size > 30 ? 2 : 1.3}px solid rgba(255,255,255,.9)`,
+      borderRightColor: 'transparent',
+      borderBottomColor: 'transparent'
     }
-  }, "or"), /*#__PURE__*/React.createElement("div", {
+  })))),
+  // ── foreground ──
+  /*#__PURE__*/React.createElement("div", {
     style: {
-      flex: 1,
-      height: '1px',
-      background: 'var(--border)'
+      position: 'relative',
+      width: '100%',
+      maxWidth: '360px',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center'
     }
-  })), /*#__PURE__*/React.createElement(Btn, {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '96px',
+      height: '96px',
+      borderRadius: '99px',
+      border: '1px solid rgba(79,229,138,.22)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      animation: 'tvpulse 2.6s infinite'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '76px',
+      height: '76px',
+      borderRadius: '99px',
+      background: 'linear-gradient(150deg, #4FE58A, #2fbf6b)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "Crown",
+    s: 34,
+    c: "var(--accent-ink)"
+  }))), /*#__PURE__*/React.createElement("h1", {
+    style: {
+      margin: '30px 0 0',
+      font: "800 38px/1 'DM Sans', sans-serif",
+      letterSpacing: '-0.04em',
+      color: 'var(--text)'
+    }
+  }, "Tennisverse"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '14px 0 0',
+      font: "400 15px/1.6 'DM Sans', sans-serif",
+      color: 'var(--text2)',
+      textAlign: 'center',
+      maxWidth: '280px'
+    }
+  }, "It's time to dominate the court."), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: '18px',
+      width: '100%',
+      padding: '11px 14px',
+      borderRadius: '12px',
+      background: 'rgba(255,107,107,.08)',
+      border: '1px solid rgba(255,107,107,.3)',
+      color: 'var(--red)',
+      font: "500 13px/1.4 'DM Sans', sans-serif",
+      textAlign: 'center'
+    }
+  }, error), /*#__PURE__*/React.createElement("button", {
     onClick: handleGoogle,
     disabled: loading,
-    size: "lg",
-    variant: "secondary",
     style: {
-      marginBottom: '24px'
+      marginTop: '34px',
+      width: '100%',
+      height: '56px',
+      borderRadius: '16px',
+      border: 'none',
+      background: '#FFFFFF',
+      color: '#1a1a1a',
+      font: "600 15px 'DM Sans', sans-serif",
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '11px'
     }
-  }, "Continue with Google"), /*#__PURE__*/React.createElement("div", {
+  },
+  // Official four-color Google mark — Google's branding guidelines
+  // require the white treatment; do not restyle it for the dark theme.
+  /*#__PURE__*/React.createElement("svg", {
+    width: "19",
+    height: "19",
+    viewBox: "0 0 48 48",
+    "aria-hidden": "true"
+  }, /*#__PURE__*/React.createElement("path", {
+    fill: "#EA4335",
+    d: "M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+  }), /*#__PURE__*/React.createElement("path", {
+    fill: "#4285F4",
+    d: "M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+  }), /*#__PURE__*/React.createElement("path", {
+    fill: "#FBBC05",
+    d: "M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24s.92 7.54 2.56 10.78l7.97-6.19z"
+  }), /*#__PURE__*/React.createElement("path", {
+    fill: "#34A853",
+    d: "M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+  })), loading ? 'Signing in…' : 'Continue with Google'), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setError('');
+      setAuthOpen(true);
+    },
     style: {
+      marginTop: '12px',
+      width: '100%',
+      height: '56px',
+      borderRadius: '16px',
+      background: 'var(--surface)',
+      border: '1px solid rgba(255,255,255,.1)',
+      color: 'var(--text)',
+      font: "600 15px 'DM Sans', sans-serif",
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '10px'
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "Send",
+    s: 17,
+    c: "var(--text2)"
+  }), "Continue with email")),
+  // ── email sheet ──
+  authOpen && /*#__PURE__*/React.createElement("div", {
+    onClick: () => setAuthOpen(false),
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(6,10,16,.72)',
+      backdropFilter: 'blur(6px)',
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+      zIndex: 400
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.stopPropagation(),
+    style: {
+      width: '100%',
+      maxWidth: '500px',
+      background: 'var(--bg3)',
+      borderRadius: '24px 24px 0 0',
+      padding: '14px 18px 30px',
+      animation: 'tvin .22s ease-out',
+      maxHeight: '92vh',
+      overflowY: 'auto'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '38px',
+      height: '4px',
+      borderRadius: '99px',
+      background: 'var(--surface2)',
+      margin: '0 auto 18px'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      padding: '5px',
+      background: 'var(--surface)',
+      borderRadius: '13px',
+      marginBottom: '20px'
+    }
+  }, [['login', 'Sign in'], ['signup', 'Sign up']].map(([m, label]) => /*#__PURE__*/React.createElement("button", {
+    key: m,
+    onClick: () => {
+      setMode(m);
+      setError('');
+    },
+    style: {
+      flex: 1,
+      height: '42px',
+      borderRadius: '10px',
+      border: 'none',
+      background: mode === m ? 'rgba(79,229,138,.14)' : 'transparent',
+      color: mode === m ? 'var(--accent)' : 'var(--text2)',
+      font: "600 14px 'DM Sans', sans-serif",
+      cursor: 'pointer',
+      transition: 'all .15s'
+    }
+  }, label))), signUp && field('Name', 'firstName', 'text', null), field('Email', 'email', 'email', null), field('Password', 'password', 'password', signUp ? /*#__PURE__*/React.createElement("span", {
+    style: {
+      font: "400 11px 'DM Sans', sans-serif",
+      color: 'var(--text3)'
+    }
+  }, "At least 8 characters") : /*#__PURE__*/React.createElement("span", {
+    onClick: async () => {
+      if (!(form.email || '').includes('@')) {
+        setError('Enter your email first, then tap Forgot.');
+        return;
+      }
+      try {
+        await auth.sendPasswordResetEmail(form.email);
+        setError('Reset link sent — check your inbox.');
+      } catch (e) {
+        setError((e.message || '').replace('Firebase: ', ''));
+      }
+    },
+    style: {
+      font: "600 11px 'DM Sans', sans-serif",
+      color: 'var(--accent)',
+      cursor: 'pointer'
+    }
+  }, "Forgot?")), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '14px',
+      font: "500 13px/1.4 'DM Sans', sans-serif",
+      color: 'var(--red)'
+    }
+  }, error), /*#__PURE__*/React.createElement("button", {
+    onClick: handleSubmit,
+    disabled: !formValid || loading,
+    style: {
+      width: '100%',
+      height: '56px',
+      borderRadius: '16px',
+      border: 'none',
+      background: formValid && !loading ? 'var(--accent)' : 'var(--surface2)',
+      color: formValid && !loading ? 'var(--accent-ink)' : 'var(--text3)',
+      font: "700 15px 'DM Sans', sans-serif",
+      cursor: formValid && !loading ? 'pointer' : 'default',
+      transition: 'all .15s'
+    }
+  }, loading ? '…' : signUp ? 'Create account' : 'Sign in'), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: '16px',
       textAlign: 'center',
-      fontSize: '14px',
+      font: "400 13px 'DM Sans', sans-serif",
       color: 'var(--text2)'
     }
-  }, mode === 'login' ? "Don't have an account? " : "Already have an account? ", /*#__PURE__*/React.createElement("span", {
-    onClick: () => setMode(mode === 'login' ? 'signup' : 'login'),
+  }, signUp ? 'Already have an account? ' : 'New to Tennisverse? ', /*#__PURE__*/React.createElement("span", {
+    onClick: () => {
+      setMode(signUp ? 'login' : 'signup');
+      setError('');
+    },
     style: {
       color: 'var(--accent)',
-      cursor: 'pointer',
-      fontWeight: '600'
+      fontWeight: '600',
+      cursor: 'pointer'
     }
-  }, mode === 'login' ? 'Sign up' : 'Sign in'))));
+  }, signUp ? 'Sign in' : 'Create one')))));
 }
 
-// ==================== HOME SCREEN ====================
 function HomeScreen({
   onCreateEvent,
   onViewEvent,
@@ -2610,10 +2877,13 @@ function HomeScreen({
     });
   };
   const stats = (userProfile === null || userProfile === void 0 ? void 0 : userProfile.stats) || {};
-  // Court time is the hero metric everywhere — stored as whole minutes.
-  const fmtCourtTime = mins => {
-    const m = Math.max(0, Math.round(mins || 0));
-    return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+  // Court time is the hero metric everywhere. stats.totalPlayTime is stored
+  // in SECONDS (LiveGameScreen increments it by timeMs/1000), so read it as
+  // seconds: H:MM once past an hour, M:SS below that.
+  const fmtCourtTime = secs => {
+    const t = Math.max(0, Math.round(secs || 0));
+    if (t >= 3600) return `${Math.floor(t / 3600)}:${String(Math.floor(t % 3600 / 60)).padStart(2, '0')}`;
+    return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
   };
   const monoDate = new Date().toLocaleDateString('en-US', {
     weekday: 'short',
@@ -12252,10 +12522,25 @@ function LiveGameScreen({
     }
   };
   const saved = getSavedSession();
+  // A session saved mid-reign holds only committed time; the reign that was
+  // running when the tab closed is recovered from the persisted anchor.
+  const savedUncommitted = saved && saved.isRunning && saved.since && saved.savedAt ? Math.max(0, saved.savedAt - saved.since) : 0;
 
   // ── core state ────────────────────────────────────────────
   const [gameStats, setGameStats] = useState(() => {
-    if (saved !== null && saved !== void 0 && saved.gameStats) return saved.gameStats;
+    if (saved !== null && saved !== void 0 && saved.gameStats) {
+      if (!savedUncommitted) return saved.gameStats;
+      const n = {
+        ...saved.gameStats
+      };
+      (saved.currentKings || []).forEach(id => {
+        if (n[id]) n[id] = {
+          ...n[id],
+          timeMs: n[id].timeMs + savedUncommitted
+        };
+      });
+      return n;
+    }
     const s = {};
     gamePlayers.forEach(p => {
       s[p.id] = {
@@ -12268,7 +12553,7 @@ function LiveGameScreen({
   });
   const [currentKings, setCurrentKings] = useState((saved === null || saved === void 0 ? void 0 : saved.currentKings) || []);
   const [selected, setSelected] = useState([]); // pre-selection buffer
-  const [totalMs, setTotalMs] = useState((saved === null || saved === void 0 ? void 0 : saved.totalMs) || 0);
+  const [totalMs, setTotalMs] = useState(((saved === null || saved === void 0 ? void 0 : saved.totalMs) || 0) + savedUncommitted);
   const [isRunning, setIsRunning] = useState((saved === null || saved === void 0 ? void 0 : saved.isRunning) || false);
   const [isPaused, setIsPaused] = useState(saved !== null && saved !== void 0 && saved.isRunning ? true : false); // only start paused if game was running
   const [phase, setPhase] = useState('game');
@@ -12282,6 +12567,49 @@ function LiveGameScreen({
   const [winnersThisRound, setWinnersThisRound] = useState((saved === null || saved === void 0 ? void 0 : saved.winnersThisRound) || {});
   const [showEditScoreboard, setShowEditScoreboard] = useState(false);
   const [editForm, setEditForm] = useState({});
+  // ── wall-clock anchors ────────────────────────────────────
+  // gameStats[id].timeMs and totalMs hold *committed* time only. The time
+  // accrued by the current reign is derived from (now - since) at render.
+  // Incrementing counters on a tick drifts and silently stops whenever the
+  // browser throttles a backgrounded tab — which is exactly what happens
+  // when a coach's phone locks mid-session.
+  const [since, setSince] = useState(() => saved && saved.isRunning ? null : null);
+  const [now, setNow] = useState(() => Date.now());
+  // Committed time in the *current* reign — resets to 0 each crowning, so the
+  // court panel can show total and reign side by side.
+  const [reignMs, setReignMs] = useState((saved === null || saved === void 0 ? void 0 : saved.reignMs) || 0);
+  const isLive = isRunning && !isPaused && currentKings.length === 2 && since !== null;
+  // Elapsed since the current reign started, 0 when not live.
+  const liveDelta = isLive ? Math.max(0, now - since) : 0;
+  const liveMs = id => ((gameStats[id] || {}).timeMs || 0) + (isLive && currentKings.includes(id) ? liveDelta : 0);
+  const liveTotal = totalMs + liveDelta;
+  const liveReign = reignMs + liveDelta;
+  // Fold the running reign into stored totals and re-anchor. Every state
+  // transition calls this before it changes kings, pauses, or ends.
+  const commitElapsed = () => {
+    if (!isLive) {
+      setSince(null);
+      return;
+    }
+    const d = Math.max(0, Date.now() - since);
+    if (d > 0) {
+      setGameStats(prev => {
+        const n = {
+          ...prev
+        };
+        currentKings.forEach(id => {
+          if (n[id]) n[id] = {
+            ...n[id],
+            timeMs: n[id].timeMs + d
+          };
+        });
+        return n;
+      });
+      setTotalMs(t => t + d);
+      setReignMs(r => r + d);
+    }
+    setSince(null);
+  };
 
   // ── wake lock ─────────────────────────────────────────────
   const requestWakeLock = async () => {
@@ -12313,37 +12641,38 @@ function LiveGameScreen({
         gameStats,
         currentKings,
         totalMs,
+        reignMs,
         isRunning,
         winnersThisRound,
         gamePlayers,
+        // Anchor of the reign in flight, so a reload can recover the time
+        // accrued since the last commit rather than discarding it.
+        since,
         // store player info so we can rebuild on reload
         savedAt: Date.now()
       };
       localStorage.setItem(GAME_SESSION_KEY, JSON.stringify(session));
     } catch (e) {}
-  }, [gameStats, currentKings, totalMs, isRunning, winnersThisRound, phase]);
+  }, [gameStats, currentKings, totalMs, isRunning, winnersThisRound, phase, since, reignMs]);
 
   // ── timer tick ────────────────────────────────────────────
+  // The interval only publishes a wall-clock reading; it never increments a
+  // counter. Re-armed unconditionally on every render rather than latched
+  // behind a boolean — a latch survives a remount while its timer does not,
+  // and the clock dies silently.
   useEffect(() => {
-    if (isRunning && !isPaused && currentKings.length === 2) {
-      intervalRef.current = setInterval(() => {
-        setGameStats(prev => {
-          const n = {
-            ...prev
-          };
-          currentKings.forEach(id => {
-            if (n[id]) n[id] = {
-              ...n[id],
-              timeMs: n[id].timeMs + 100
-            };
-          });
-          return n;
-        });
-        setTotalMs(t => t + 100);
-      }, 100);
+    const t = setInterval(() => setNow(Date.now()), 500);
+    intervalRef.current = t;
+    return () => clearInterval(t);
+  });
+  // Anchor the reign whenever the session becomes live without one (crowning,
+  // resume, or a restored session).
+  useEffect(() => {
+    if (isRunning && !isPaused && currentKings.length === 2 && since === null) {
+      setSince(Date.now());
+      setNow(Date.now());
     }
-    return () => clearInterval(intervalRef.current);
-  }, [isRunning, isPaused, currentKings]);
+  }, [isRunning, isPaused, currentKings, since]);
 
   // ── helpers ───────────────────────────────────────────────
   const fmtMs = ms => {
@@ -12356,14 +12685,16 @@ function LiveGameScreen({
   };
   const getLeaderboard = () => Object.entries(gameStats).map(([id, s]) => {
     const p = gamePlayers.find(x => x.id === id);
+    const t = liveMs(id); // derived — includes the reign in progress
     return {
       id,
       name: (p === null || p === void 0 ? void 0 : p.name) || id,
       photoURL: p === null || p === void 0 ? void 0 : p.photoURL,
-      timeMs: s.timeMs,
+      timeMs: t,
       wins: s.wins,
       winners: s.winners,
-      avg: s.wins > 0 ? s.timeMs / s.wins : 0
+      isKing: currentKings.includes(id),
+      avg: s.wins > 0 ? t / s.wins : 0
     };
   }).sort((a, b) => b.timeMs - a.timeMs);
 
@@ -12379,24 +12710,37 @@ function LiveGameScreen({
     }
     const next = [...selected, id];
     if (next.length === 2) {
-      // Commit the 2 selected players as new kings
-      setCurrentKings(prevKings => {
-        setGameStats(s => {
-          const n = {
-            ...s
+      // Bank the reign that just ended before the kings change, so the
+      // outgoing pair keeps every millisecond they actually held the court.
+      const d = isLive ? Math.max(0, Date.now() - since) : 0;
+      const outgoing = currentKings;
+      setGameStats(s => {
+        const n = {
+          ...s
+        };
+        if (d > 0) outgoing.forEach(id2 => {
+          if (n[id2]) n[id2] = {
+            ...n[id2],
+            timeMs: n[id2].timeMs + d
           };
-          next.forEach(kid => {
-            if (!prevKings.includes(kid) && n[kid]) {
-              n[kid] = {
-                ...n[kid],
-                wins: n[kid].wins + 1
-              };
-            }
-          });
-          return n;
         });
-        return next;
+        // A win is credited to the newly crowned pair — they're the players
+        // just tapped as winners. Existing stats are counted this way.
+        next.forEach(kid => {
+          if (!outgoing.includes(kid) && n[kid]) {
+            n[kid] = {
+              ...n[kid],
+              wins: n[kid].wins + 1
+            };
+          }
+        });
+        return n;
       });
+      if (d > 0) setTotalMs(t => t + d);
+      setReignMs(0); // a new pair starts a fresh reign
+      setSince(Date.now());
+      setNow(Date.now());
+      setCurrentKings(next);
       setWinnersThisRound({}); // reset per-round winner tracking
       setIsRunning(true);
       setSelected([]);
@@ -12406,31 +12750,39 @@ function LiveGameScreen({
   };
 
   // ── winner button ─────────────────────────────────────────
+  // Toggle: a winner adds a minute of court time to the player and to the
+  // session total; tapping again fully reverses both. Mis-taps are common
+  // when the coach is scoring mid-rally, so this has to be undoable.
   const recordWinner = id => {
-    if (!currentKings.includes(id) || winnerCooldown.current || winnersThisRound[id]) return;
-    winnerCooldown.current = true;
-    setWinnersThisRound(prev => ({
-      ...prev,
-      [id]: true
-    }));
+    if (!currentKings.includes(id) || !gameStats[id]) return;
+    const claimed = !!winnersThisRound[id];
+    const delta = claimed ? -60000 : 60000;
+    setWinnersThisRound(prev => {
+      const n = {
+        ...prev
+      };
+      if (claimed) delete n[id];else n[id] = true;
+      return n;
+    });
     setGameStats(prev => ({
       ...prev,
       [id]: {
         ...prev[id],
-        winners: prev[id].winners + 1,
-        timeMs: prev[id].timeMs + 60000
+        winners: Math.max(0, prev[id].winners + (claimed ? -1 : 1)),
+        timeMs: Math.max(0, prev[id].timeMs + delta)
       }
     }));
-    setWinnerAnim(id);
-    setTimeout(() => {
-      setWinnerAnim(null);
-      winnerCooldown.current = false;
-    }, 1600);
+    setTotalMs(t => Math.max(0, t + delta));
+    if (!claimed) {
+      setWinnerAnim(id);
+      setTimeout(() => setWinnerAnim(null), 1600);
+    }
   };
 
   // ── edit scoreboard ──────────────────────────────────────
   const openEditScoreboard = () => {
-    // Pre-fill form with current stats, time in readable m:ss format
+    // Bank the running reign first, or editing would discard it.
+    commitElapsed();
     const form = {};
     gamePlayers.forEach(p => {
       const s = gameStats[p.id] || {
@@ -12438,7 +12790,7 @@ function LiveGameScreen({
         wins: 0,
         winners: 0
       };
-      const totalSecs = Math.floor(s.timeMs / 1000);
+      const totalSecs = Math.floor(liveMs(p.id) / 1000);
       form[p.id] = {
         mins: String(Math.floor(totalSecs / 60)),
         secs: String(totalSecs % 60),
@@ -12472,11 +12824,13 @@ function LiveGameScreen({
 
   // ── pause / resume ────────────────────────────────────────
   const pauseGame = async () => {
+    commitElapsed(); // bank the running reign before the clock freezes
     setIsPaused(true);
-    clearInterval(intervalRef.current);
     await releaseWakeLock();
   };
   const resumeGame = async () => {
+    // since re-anchors from the effect once isPaused clears.
+    setNow(Date.now());
     setIsPaused(false);
     await requestWakeLock();
   };
@@ -12507,7 +12861,7 @@ function LiveGameScreen({
           'stats.gamesPlayed': firebase.firestore.FieldValue.increment(1),
           'stats.totalWins': firebase.firestore.FieldValue.increment(s.wins || 0),
           'stats.totalWinners': firebase.firestore.FieldValue.increment(s.winners || 0),
-          'stats.totalPlayTime': firebase.firestore.FieldValue.increment(Math.floor((s.timeMs || 0) / 1000))
+          'stats.totalPlayTime': firebase.firestore.FieldValue.increment(Math.floor(liveMs(p.id) / 1000))
         });
       } catch (e) {}
     }
@@ -12670,7 +13024,7 @@ function LiveGameScreen({
         fontSize: '13px',
         color: 'var(--text2)'
       }
-    }, "dominated the court \xB7 ", fmtMsLong(totalMs), " total")), /*#__PURE__*/React.createElement("div", {
+    }, "dominated the court \xB7 ", fmtMsLong(liveTotal), " total")), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         flexDirection: 'column',
@@ -12814,7 +13168,7 @@ function LiveGameScreen({
       fontWeight: '500',
       marginBottom: '20px'
     }
-  }, fmtMs(totalMs), " played"), /*#__PURE__*/React.createElement("button", {
+  }, fmtMs(liveTotal), " played"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setShowResumePrompt(false);
     },
@@ -12935,7 +13289,7 @@ function LiveGameScreen({
       marginTop: '4px',
       fontFamily: 'DM Mono'
     }
-  }, fmtMs(totalMs), " elapsed")), /*#__PURE__*/React.createElement("div", {
+  }, fmtMs(liveTotal), " elapsed")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: '11px',
       fontWeight: '700',
@@ -13026,28 +13380,31 @@ function LiveGameScreen({
     style: {
       maxWidth: '500px',
       margin: '0 auto',
-      padding: '20px 16px'
+      padding: '20px 16px 130px'
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  },
+  // ── Header: back · game name over session clock · edit ──
+  /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: '20px'
+      marginBottom: '18px'
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: onBack,
     style: {
-      width: '36px',
-      height: '36px',
-      borderRadius: 'var(--radius3)',
+      width: '38px',
+      height: '38px',
+      borderRadius: '13px',
       background: 'var(--surface)',
       border: '1px solid var(--border)',
       color: 'var(--text2)',
       cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'center'
+      justifyContent: 'center',
+      flexShrink: 0
     }
   }, /*#__PURE__*/React.createElement(I, {
     n: "ArrowLeft",
@@ -13055,259 +13412,451 @@ function LiveGameScreen({
     c: "currentColor"
   })), /*#__PURE__*/React.createElement("div", {
     style: {
-      textAlign: 'center'
+      textAlign: 'center',
+      minWidth: 0,
+      flex: 1
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: '11px',
-      fontWeight: '700',
-      letterSpacing: '0.1em',
+      font: "500 10px/1 var(--mono)",
+      letterSpacing: '.18em',
       textTransform: 'uppercase',
       color: 'var(--text3)',
-      marginBottom: '2px'
+      marginBottom: '6px',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap'
     }
-  }, "King's Court"), /*#__PURE__*/React.createElement("div", {
+  }, (event === null || event === void 0 ? void 0 : event.title) || "King's Court"), /*#__PURE__*/React.createElement("div", {
+    className: "mono",
     style: {
-      fontFamily: 'DM Mono',
-      fontSize: '28px',
-      color: isRunning && !isPaused ? 'var(--accent)' : 'var(--text2)',
-      letterSpacing: '0.05em'
+      font: "400 26px/1 var(--mono)",
+      letterSpacing: '.02em',
+      color: isRunning && !isPaused ? 'var(--accent)' : 'var(--text2)'
     }
-  }, fmtMs(totalMs))), /*#__PURE__*/React.createElement("button", {
+  }, fmtMs(liveTotal))), /*#__PURE__*/React.createElement("button", {
     onClick: openEditScoreboard,
     style: {
-      width: '36px',
-      height: '36px',
-      borderRadius: 'var(--radius3)',
+      width: '38px',
+      height: '38px',
+      borderRadius: '13px',
       background: 'var(--surface)',
       border: '1px solid var(--border)',
       color: 'var(--text2)',
       cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'center'
-    },
-    title: "Edit Scoreboard"
+      justifyContent: 'center',
+      flexShrink: 0
+    }
   }, /*#__PURE__*/React.createElement(I, {
     n: "Edit",
-    s: 16,
+    s: 15,
     c: "currentColor"
-  }))), currentKings.length === 2 && /*#__PURE__*/React.createElement("div", {
+  }))),
+  // ── Court panel ──
+  /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderRadius: '20px',
+      border: '1px solid rgba(255,255,255,.08)',
+      overflow: 'hidden',
+      marginBottom: '22px',
+      opacity: isPaused ? 0.3 : 1,
+      filter: isPaused ? 'grayscale(1)' : 'none',
+      pointerEvents: isPaused ? 'none' : 'auto',
+      transition: 'opacity .25s, filter .25s'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'linear-gradient(180deg, rgba(79,229,138,.13), rgba(79,229,138,.05))',
+      padding: '15px 15px 17px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: '10px',
-      padding: '12px 16px',
-      background: 'rgba(79,229,138,0.07)',
-      border: '1px solid rgba(79,229,138,0.18)',
-      borderRadius: 'var(--radius2)',
-      marginBottom: '16px',
-      animation: 'kingPulse 2.5s ease-in-out infinite'
+      gap: '7px',
+      marginBottom: currentKings.length === 2 ? '13px' : '0'
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
-      fontSize: '13px'
+      display: 'flex',
+      gap: '4px'
     }
-  }, "\uD83D\uDC51"), /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "Crown",
+    s: 14,
+    c: "var(--gold)"
+  }), /*#__PURE__*/React.createElement(I, {
+    n: "Crown",
+    s: 14,
+    c: "var(--gold)"
+  })), /*#__PURE__*/React.createElement("span", {
     style: {
-      fontWeight: '700',
-      fontSize: '14px',
-      color: 'var(--accent)'
+      font: "500 10px/1 var(--mono)",
+      letterSpacing: '.16em',
+      textTransform: 'uppercase',
+      color: 'var(--gold)'
     }
-  }, p1 === null || p1 === void 0 ? void 0 : p1.name), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: '12px',
-      color: 'var(--text3)'
-    }
-  }, "&"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: '700',
-      fontSize: '14px',
-      color: 'var(--accent)'
-    }
-  }, p2 === null || p2 === void 0 ? void 0 : p2.name), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: '13px'
-    }
-  }, "\uD83D\uDC51")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: 'center',
-      fontSize: '12px',
-      fontWeight: '600',
-      color: selected.length === 1 ? 'var(--accent)' : 'var(--text3)',
-      letterSpacing: '0.04em',
-      marginBottom: '14px',
-      textTransform: 'uppercase'
-    }
-  }, instrText), /*#__PURE__*/React.createElement("div", {
+  }, currentKings.length === 2 ? 'Dominating the court · total | reign' : 'The court')), currentKings.length === 2 ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(2,1fr)',
-      gap: '10px',
-      marginBottom: '20px'
+      gridTemplateColumns: '1fr 1fr',
+      gap: '10px'
     }
-  }, gamePlayers.map(p => {
-    const s = gameStats[p.id] || {
-      timeMs: 0,
-      wins: 0,
-      winners: 0
+  }, currentKings.map(kid => {
+    const kp = gamePlayers.find(x => x.id === kid) || {
+      name: kid
     };
-    const isKing = currentKings.includes(p.id);
+    const claimed = !!winnersThisRound[kid];
+    const bonus = ((gameStats[kid] || {}).winners || 0);
+    return /*#__PURE__*/React.createElement("div", {
+      key: kid,
+      style: {
+        borderRadius: '14px',
+        background: 'rgba(8,14,20,.55)',
+        border: '1px solid rgba(79,229,138,.3)',
+        padding: '13px 11px 11px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '8px',
+        animation: 'tvpulse 2.6s infinite'
+      }
+    }, /*#__PURE__*/React.createElement(Avatar, {
+      src: kp.photoURL,
+      name: kp.name,
+      size: 30
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        font: "700 16px/1 'DM Sans', sans-serif",
+        letterSpacing: '-0.02em',
+        color: 'var(--text)',
+        maxWidth: '100%',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, (kp.name || '').split(' ')[0]), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'baseline',
+        gap: '5px',
+        whiteSpace: 'nowrap'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "mono",
+      style: {
+        font: "400 18px/1 var(--mono)",
+        color: 'var(--accent)'
+      }
+    }, fmtMs(liveMs(kid))), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: 'var(--ink-faint)',
+        fontSize: '11px'
+      }
+    }, "|"), /*#__PURE__*/React.createElement("span", {
+      className: "mono",
+      style: {
+        font: "400 13px/1 var(--mono)",
+        color: 'var(--text2)'
+      }
+    }, fmtMs(liveReign)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: 'var(--ink-faint)',
+        fontSize: '11px'
+      }
+    }, "|"), /*#__PURE__*/React.createElement("span", {
+      className: "mono",
+      style: {
+        font: "400 13px/1 var(--mono)",
+        color: bonus > 0 ? 'var(--orange)' : 'var(--text3)'
+      }
+    }, "+", bonus, "m")), /*#__PURE__*/React.createElement("button", {
+      onClick: e => {
+        e.stopPropagation();
+        recordWinner(kid);
+      },
+      title: claimed ? 'Winner counted · tap to undo' : 'Tap when this player wins the point',
+      style: {
+        width: '100%',
+        height: '27px',
+        borderRadius: '9px',
+        border: `1px solid ${claimed ? 'var(--orange-edge)' : 'var(--border)'}`,
+        background: claimed ? 'var(--orange-tint)' : 'var(--surface2)',
+        color: claimed ? 'var(--orange)' : 'var(--text3)',
+        filter: claimed ? 'none' : 'grayscale(1)',
+        font: "600 11px/1 'DM Sans', sans-serif",
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '5px',
+        transition: 'all .15s'
+      }
+    }, "🔥 Winner +1m"));
+  })) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '14px 6px 4px',
+      textAlign: 'center',
+      font: "400 13px/1.5 'DM Sans', sans-serif",
+      color: 'var(--text2)'
+    }
+  }, "No one on the court yet.", /*#__PURE__*/React.createElement("br", null), "Tap two players below to crown them."))),
+  // ── Queue section header ──
+  /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      marginBottom: '12px',
+      opacity: isPaused ? 0.3 : 1,
+      transition: 'opacity .25s'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: '6px',
+      height: '6px',
+      borderRadius: '99px',
+      flex: 'none',
+      background: selected.length === 1 ? 'var(--accent)' : 'var(--text3)'
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      font: "600 11px/1 'DM Sans', sans-serif",
+      letterSpacing: '.13em',
+      textTransform: 'uppercase',
+      color: selected.length === 1 ? 'var(--accent)' : 'var(--text3)',
+      whiteSpace: 'nowrap'
+    }
+  }, currentKings.length === 2 ? selected.length === 1 ? 'Tap one more winner' : 'Tap the next two winners' : selected.length === 1 ? 'Tap one more winner' : 'Tap two players to start'), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      height: '1px',
+      background: 'var(--border)'
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "mono",
+    style: {
+      font: "400 11px/1 var(--mono)",
+      color: 'var(--text3)',
+      whiteSpace: 'nowrap'
+    }
+  }, gamePlayers.filter(p => !currentKings.includes(p.id)).length, " waiting")),
+  // ── Queue grid ──
+  /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: '8px',
+      opacity: isPaused ? 0.3 : 1,
+      filter: isPaused ? 'grayscale(1)' : 'none',
+      pointerEvents: isPaused ? 'none' : 'auto',
+      transition: 'opacity .25s, filter .25s'
+    }
+  }, gamePlayers.filter(p => !currentKings.includes(p.id)).map(p => {
     const isSel = selected.includes(p.id);
+    const bonus = ((gameStats[p.id] || {}).winners || 0);
     return /*#__PURE__*/React.createElement("div", {
       key: p.id,
       onClick: () => tapPlayer(p.id),
       style: {
-        background: isKing ? 'rgba(79,229,138,0.08)' : isSel ? 'rgba(79,229,138,0.12)' : 'var(--surface)',
-        border: `2px solid ${isKing ? 'rgba(79,229,138,0.4)' : isSel ? 'rgba(79,229,138,0.5)' : 'var(--border)'}`,
-        borderRadius: 'var(--radius2)',
-        padding: '14px 12px',
-        cursor: isKing ? 'default' : 'pointer',
-        transition: 'border-color 0.15s, background 0.15s',
-        animation: isKing ? 'kingPulse 2.5s ease-in-out infinite' : 'none',
-        position: 'relative',
-        overflow: 'hidden'
+        minHeight: '62px',
+        padding: '10px 12px 8px',
+        borderRadius: '13px',
+        background: isSel ? 'rgba(79,229,138,.12)' : 'var(--surface)',
+        border: `1px solid ${isSel ? 'rgba(79,229,138,.5)' : 'var(--border)'}`,
+        cursor: 'pointer',
+        transform: isSel ? 'scale(0.97)' : 'none',
+        transition: 'all .15s'
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        marginBottom: '10px'
+        marginBottom: '7px'
       }
     }, /*#__PURE__*/React.createElement(Avatar, {
       src: p.photoURL,
       name: p.name,
-      size: 30
-    }), /*#__PURE__*/React.createElement("div", {
+      size: 24
+    }), /*#__PURE__*/React.createElement("span", {
       style: {
-        fontWeight: '700',
-        fontSize: '13px',
+        font: "600 14px/1 'DM Sans', sans-serif",
+        color: 'var(--text)',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-        flex: 1
+        whiteSpace: 'nowrap'
       }
-    }, isKing && /*#__PURE__*/React.createElement("span", {
-      style: {
-        marginRight: '4px'
-      }
-    }, "\uD83D\uDC51"), p.name)), isKing && !anyWinnerThisRound && /*#__PURE__*/React.createElement("button", {
-      onClick: e => {
-        e.stopPropagation();
-        recordWinner(p.id);
-      },
-      style: {
-        width: '100%',
-        padding: '7px',
-        borderRadius: 'var(--radius3)',
-        border: 'none',
-        background: 'linear-gradient(135deg,#f97316,#FFC65C)',
-        color: '#0a0a0a',
-        fontSize: '11px',
-        fontWeight: '800',
-        letterSpacing: '0.06em',
-        cursor: 'pointer',
-        marginBottom: '10px',
-        boxShadow: '0 3px 12px rgba(255,198,92,0.35)'
-      }
-    }, "\uD83D\uDD25 WINNER"), isKing && anyWinnerThisRound && /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: '100%',
-        padding: '7px',
-        borderRadius: 'var(--radius3)',
-        background: 'rgba(255,198,92,0.08)',
-        border: '1px solid rgba(255,198,92,0.2)',
-        color: 'var(--amber)',
-        fontSize: '11px',
-        fontWeight: '700',
-        letterSpacing: '0.04em',
-        marginBottom: '10px',
-        textAlign: 'center'
-      }
-    }, "\uD83D\uDD25 Recorded"), /*#__PURE__*/React.createElement("div", {
+    }, (p.name || '').split(' ')[0])), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
-        gap: '10px'
+        alignItems: 'baseline',
+        gap: '5px'
       }
-    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "mono",
       style: {
-        fontFamily: 'DM Mono',
-        fontSize: '15px',
-        fontWeight: '500',
-        color: isKing ? 'var(--accent)' : 'var(--text)'
+        font: "400 14px/1 var(--mono)",
+        color: 'var(--text2)'
       }
-    }, fmtMs(s.timeMs)), /*#__PURE__*/React.createElement("div", {
+    }, fmtMs(liveMs(p.id))), /*#__PURE__*/React.createElement("span", {
       style: {
-        fontSize: '9px',
-        color: 'var(--text3)',
-        letterSpacing: '0.06em',
-        textTransform: 'uppercase',
-        marginTop: '1px'
+        color: 'var(--ink-faint)',
+        fontSize: '10px'
       }
-    }, "Time")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    }, "|"), /*#__PURE__*/React.createElement("span", {
+      className: "mono",
       style: {
-        fontFamily: 'DM Mono',
-        fontSize: '15px',
-        fontWeight: '500'
+        font: "400 10px/1 var(--mono)",
+        color: bonus > 0 ? 'var(--orange)' : 'var(--text3)'
       }
-    }, s.wins), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: '9px',
-        color: 'var(--text3)',
-        letterSpacing: '0.06em',
-        textTransform: 'uppercase',
-        marginTop: '1px'
-      }
-    }, "Wins")), s.winners > 0 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: 'DM Mono',
-        fontSize: '15px',
-        color: 'var(--amber)'
-      }
-    }, "\uD83D\uDD25", s.winners), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: '9px',
-        color: 'var(--text3)',
-        letterSpacing: '0.06em',
-        textTransform: 'uppercase',
-        marginTop: '1px'
-      }
-    }, "Fire"))));
-  })), /*#__PURE__*/React.createElement("button", {
-    onClick: pauseGame,
-    disabled: !isRunning,
+    }, "+", bonus, "m 🔥")));
+  }))),
+  // ── Paused: leaderboard overlay ──
+  isPaused && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(6,10,16,.7)',
+      backdropFilter: 'blur(6px)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '24px',
+      zIndex: 200
+    }
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       width: '100%',
-      padding: '14px',
-      borderRadius: 'var(--radius2)',
-      background: 'rgba(255,198,92,0.12)',
-      border: '1px solid rgba(255,198,92,0.35)',
-      color: 'var(--amber)',
-      fontSize: '14px',
-      fontWeight: '700',
-      cursor: isRunning ? 'pointer' : 'default',
-      letterSpacing: '0.04em',
-      marginBottom: '10px',
-      opacity: isRunning ? 1 : 0.4
+      maxWidth: '380px',
+      maxHeight: '70vh',
+      overflowY: 'auto',
+      background: 'var(--bg3)',
+      borderRadius: '20px',
+      border: '1px solid var(--border)',
+      boxShadow: 'var(--shadow)',
+      padding: '22px 20px',
+      animation: 'tvin .22s ease-out'
     }
-  }, "\u23F8 Pause Game"), /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      font: "800 24px/1 'DM Sans', sans-serif",
+      letterSpacing: '-0.03em',
+      color: 'var(--text)',
+      paddingBottom: '14px',
+      marginBottom: '14px',
+      borderBottom: '1px solid var(--border)'
+    }
+  }, "Leaderboard"), getLeaderboard().map((pl, i) => {
+    const top = getLeaderboard()[0];
+    const pct = top && top.timeMs > 0 ? Math.max(3, Math.round(pl.timeMs / top.timeMs * 100)) : 3;
+    const barColor = i === 0 ? 'var(--gold)' : i < 3 ? 'var(--accent)' : 'rgba(79,229,138,.35)';
+    return /*#__PURE__*/React.createElement("div", {
+      key: pl.id,
+      style: {
+        marginBottom: '13px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '9px',
+        marginBottom: '5px'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "mono",
+      style: {
+        font: "400 12px/1 var(--mono)",
+        color: 'var(--text3)',
+        width: '16px',
+        flex: 'none'
+      }
+    }, i + 1), /*#__PURE__*/React.createElement("span", {
+      style: {
+        font: "600 15px/1 'DM Sans', sans-serif",
+        color: pl.isKing ? 'var(--accent)' : 'var(--text)',
+        flex: 1,
+        minWidth: 0,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, (pl.name || '').split(' ')[0]), pl.isKing && /*#__PURE__*/React.createElement(I, {
+      n: "Crown",
+      s: 13,
+      c: "var(--gold)"
+    }), /*#__PURE__*/React.createElement("span", {
+      className: "mono",
+      style: {
+        font: "400 13px/1 var(--mono)",
+        color: 'var(--text2)',
+        flex: 'none'
+      }
+    }, fmtMs(pl.timeMs), pl.winners > 0 ? ` | ${pl.winners}m 🔥` : '')), /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: '4px',
+        borderRadius: '99px',
+        background: 'var(--surface2)',
+        overflow: 'hidden'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: pct + '%',
+        height: '100%',
+        background: barColor,
+        borderRadius: '99px',
+        transition: 'width .4s ease'
+      }
+    })));
+  }))),
+  // ── Sticky footer: Pause | End ──
+  /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(8,12,19,.92)',
+      backdropFilter: 'blur(14px)',
+      borderTop: '1px solid var(--border)',
+      padding: '14px 16px 30px',
+      display: 'flex',
+      gap: '10px',
+      zIndex: 250
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: isPaused ? resumeGame : pauseGame,
+    disabled: !isRunning,
+    style: {
+      flex: 1,
+      height: '56px',
+      borderRadius: '16px',
+      border: 'none',
+      background: isPaused ? 'var(--accent)' : 'var(--surface2)',
+      color: isPaused ? 'var(--accent-ink)' : 'var(--text)',
+      font: "700 15px/1 'DM Sans', sans-serif",
+      cursor: isRunning ? 'pointer' : 'default',
+      opacity: isRunning ? 1 : 0.5,
+      animation: isPaused ? 'tvglow 1.6s infinite' : 'none'
+    }
+  }, isPaused ? 'Resume' : 'Pause'), /*#__PURE__*/React.createElement("button", {
     onClick: endGame,
     disabled: savingResults,
     style: {
-      width: '100%',
-      padding: '14px',
-      borderRadius: 'var(--radius2)',
-      background: 'transparent',
-      border: '1px solid rgba(255,107,107,0.3)',
+      flex: 1,
+      height: '56px',
+      borderRadius: '16px',
+      border: 'none',
+      background: 'var(--surface2)',
       color: 'var(--red)',
-      fontSize: '14px',
-      fontWeight: '700',
-      cursor: 'pointer',
-      letterSpacing: '0.04em'
+      font: "700 15px/1 'DM Sans', sans-serif",
+      cursor: 'pointer'
     }
-  }, savingResults ? 'Saving…' : 'End Game'))), showEditScoreboard && /*#__PURE__*/React.createElement("div", {
+  }, savingResults ? 'Saving…' : 'End'))), showEditScoreboard && /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'fixed',
       inset: 0,
