@@ -7,35 +7,53 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Tennisverse">
-  <meta name="theme-color" content="#050a14">
+  <meta name="theme-color" content="#080C13">
   <title>Tennisverse</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    /* Design tokens — Tennisverse mobile redesign.
+       One green (live/primary), one gold (reigns/1st), one orange (winner
+       bonuses only). Their roles never mix. Every numeral is DM Mono. */
     :root {
-      --bg: #050a14;
-      --bg2: #0a1120;
-      --bg3: #111825;
-      --surface: #141e2e;
-      --surface2: #1a2538;
+      --bg: #080C13;            /* canvas */
+      --bg2: #0C1119;           /* surface deep — nav wells */
+      --bg3: #0E1520;           /* surface raised — sheets, overlay cards */
+      --surface: #111926;       /* cards, rows, inputs */
+      --surface2: #18222f;      /* secondary buttons, disabled CTA */
+      --navbar: #0B111A;
       --border: rgba(255,255,255,0.07);
       --border2: rgba(255,255,255,0.12);
-      --text: #f0f4ff;
-      --text2: #8899bb;
-      --text3: #4a5878;
-      --accent: #4ade80;
-      --accent2: #22c55e;
-      --accent3: rgba(74,222,128,0.12);
-      --accent4: rgba(74,222,128,0.06);
-      --red: #f87171;
-      --amber: #fbbf24;
+      --text: #EDF2FA;          /* ink primary */
+      --text2: #8A99B3;         /* ink secondary */
+      --text3: #56637C;         /* ink tertiary — labels, eyebrows */
+      --ink-faint: #2b374a;
+      --accent: #4FE58A;        /* green — live, primary */
+      --accent2: #2fbf6b;       /* green gradient end */
+      --accent3: rgba(79,229,138,0.12);
+      --accent4: rgba(79,229,138,0.06);
+      --accent-edge: rgba(79,229,138,0.45);
+      --accent-ink: #04170C;    /* text on green fills */
+      --gold: #FFC65C;          /* reign / king of court / 1st */
+      --gold-ink: #C9A961;
+      --gold-tint: rgba(255,198,92,0.16);
+      --gold-edge: rgba(255,198,92,0.28);
+      --orange: #FFA45C;        /* winner bonus only */
+      --orange-muted: #C08B5C;
+      --orange-tint: rgba(255,150,60,0.16);
+      --orange-edge: rgba(255,150,60,0.45);
+      --red: #FF6B6B;
+      --amber: #FFC65C;         /* alias — legacy call sites read gold */
       --blue: #60a5fa;
-      --shadow: 0 4px 24px rgba(0,0,0,0.4);
+      --mono: 'DM Mono', ui-monospace, monospace;
+      --shadow: 0 24px 60px rgba(0,0,0,0.55);
       --shadow2: 0 1px 3px rgba(0,0,0,0.3);
-      --radius: 16px;
-      --radius2: 12px;
-      --radius3: 8px;
+      --radius: 20px;           /* large panels */
+      --radius2: 14px;          /* cards, rows, buttons */
+      --radius3: 11px;          /* small pills */
+      --radius-sheet: 24px;
     }
     body {
       margin: 0; padding: 0;
@@ -60,7 +78,15 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes confettiFall { 0% { transform: translateY(0) rotate(0deg); opacity:1; } 100% { transform: translateY(100vh) rotate(720deg); opacity:0; } }
     @keyframes popIn { 0% { transform:scale(0.4); opacity:0; } 70% { transform:scale(1.12); } 100% { transform:scale(1); opacity:1; } }
-    @keyframes kingPulse { 0%,100% { box-shadow:0 0 0 0 rgba(74,222,128,0); } 50% { box-shadow:0 0 0 6px rgba(74,222,128,0.15); } }
+    @keyframes kingPulse { 0%,100% { box-shadow:0 0 0 0 rgba(79,229,138,0); } 50% { box-shadow:0 0 0 6px rgba(79,229,138,0.15); } }
+    /* Redesign motion set */
+    @keyframes tvpulse { 0%,100% { box-shadow:0 0 0 0 rgba(79,229,138,0); } 50% { box-shadow:0 0 0 7px rgba(79,229,138,0.10); } }
+    @keyframes tvglow { 0%,100% { box-shadow:0 0 0 0 rgba(79,229,138,0.45); } 50% { box-shadow:0 0 0 10px rgba(79,229,138,0); } }
+    @keyframes tvin { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    /* Every numeral is mono — it's what makes the timing read as instrumentation. */
+    .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .eyebrow { font: 600 11px/1 'DM Sans', sans-serif; letter-spacing: .13em; text-transform: uppercase; color: var(--text3); }
+    .eyebrow-mono { font: 500 10px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--text3); }
     .animate-in { animation: slideUp 0.25s ease-out; }
     .pac-container { 
       background: var(--surface) !important; 
@@ -99,10 +125,10 @@
       var r = document.getElementById('root');
       if (r) {
         var stack = err && err.stack ? err.stack : '';
-        r.innerHTML = '<div style="padding:20px;font-family:monospace;font-size:12px;background:#050a14;color:#f87171;min-height:100vh"><b style=\"font-size:16px\">App Error</b><br><br>' + 
-          '<div style=\"color:#fbbf24;margin-bottom:8px\">' + msg + '</div>' +
+        r.innerHTML = '<div style="padding:20px;font-family:monospace;font-size:12px;background:#080C13;color:#FF6B6B;min-height:100vh"><b style=\"font-size:16px\">App Error</b><br><br>' + 
+          '<div style=\"color:#FFC65C;margin-bottom:8px\">' + msg + '</div>' +
           '<div style=\"color:#888;font-size:11px;margin-bottom:12px\">' + (src||'') + ':' + line + ':' + (col||0) + '</div>' +
-          (stack ? '<pre style=\"font-size:10px;color:#60a5fa;white-space:pre-wrap;word-break:break-all;background:#0a1120;padding:12px;border-radius:8px\">' + stack.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</pre>' : '') +
+          (stack ? '<pre style=\"font-size:10px;color:#60a5fa;white-space:pre-wrap;word-break:break-all;background:#0C1119;padding:12px;border-radius:8px\">' + stack.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</pre>' : '') +
           '</div>';
       }
       return false;
@@ -1088,8 +1114,8 @@ const TennisverseLogo = ({
       overflow: 'hidden',
       flexShrink: 0,
       background: '#0c1d35',
-      border: `${Math.max(2, size / 40)}px solid rgba(74,222,128,0.4)`,
-      boxShadow: '0 0 0 1px rgba(74,222,128,0.15)',
+      border: `${Math.max(2, size / 40)}px solid rgba(79,229,138,0.4)`,
+      boxShadow: '0 0 0 1px rgba(79,229,138,0.15)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center'
@@ -1132,7 +1158,7 @@ const TVLogoSVG = ({
   stopColor: "#29B6F6"
 }), /*#__PURE__*/React.createElement("stop", {
   offset: "55%",
-  stopColor: "#4ade80"
+  stopColor: "#4FE58A"
 }), /*#__PURE__*/React.createElement("stop", {
   offset: "100%",
   stopColor: "#AEEA00"
@@ -1296,7 +1322,7 @@ const TVLogoSVG = ({
   href: "#tvArc",
   startOffset: "4%"
 }, "TENNISVERSE")), /*#__PURE__*/React.createElement("g", {
-  fill: "#4ade80"
+  fill: "#4FE58A"
 }, /*#__PURE__*/React.createElement("path", {
   d: "M57 66 l1.5 3 1.5-3-1.5-3z",
   opacity: "0.9"
@@ -1327,7 +1353,7 @@ const TVLogoSVG = ({
   cx: "162",
   cy: "65",
   r: "1.8",
-  fill: "#4ade80",
+  fill: "#4FE58A",
   opacity: "0.8"
 }), /*#__PURE__*/React.createElement("circle", {
   cx: "44",
@@ -1489,7 +1515,7 @@ const Avatar = ({
       ...st
     }
   });
-  const colors = ['#4ade80', '#60a5fa', '#f472b6', '#fb923c', '#a78bfa'];
+  const colors = ['#4FE58A', '#60a5fa', '#f472b6', '#fb923c', '#a78bfa'];
   const ci = (name || '?').charCodeAt(0) % colors.length;
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1515,20 +1541,20 @@ const Badge = ({
 }) => {
   const colors = {
     green: {
-      bg: 'rgba(74,222,128,0.12)',
-      text: '#4ade80'
+      bg: 'rgba(79,229,138,0.12)',
+      text: '#4FE58A'
     },
     blue: {
       bg: 'rgba(96,165,250,0.12)',
       text: '#60a5fa'
     },
     amber: {
-      bg: 'rgba(251,191,36,0.12)',
-      text: '#fbbf24'
+      bg: 'rgba(255,198,92,0.12)',
+      text: '#FFC65C'
     },
     red: {
-      bg: 'rgba(248,113,113,0.12)',
-      text: '#f87171'
+      bg: 'rgba(255,107,107,0.12)',
+      text: '#FF6B6B'
     },
     purple: {
       bg: 'rgba(167,139,250,0.12)',
@@ -1577,7 +1603,7 @@ const Btn = ({
   const variants = {
     primary: {
       background: 'var(--accent)',
-      color: '#050a14'
+      color: 'var(--accent-ink)'
     },
     secondary: {
       background: 'var(--surface2)',
@@ -1590,9 +1616,9 @@ const Btn = ({
       border: '1px solid var(--border)'
     },
     danger: {
-      background: 'rgba(248,113,113,0.12)',
-      color: '#f87171',
-      border: '1px solid rgba(248,113,113,0.3)'
+      background: 'rgba(255,107,107,0.12)',
+      color: '#FF6B6B',
+      border: '1px solid rgba(255,107,107,0.3)'
     },
     outline: {
       background: 'transparent',
@@ -1746,12 +1772,12 @@ const StarRating = ({
   onClick: () => !readonly && onChange && onChange(i),
   style: {
     cursor: readonly ? 'default' : 'pointer',
-    color: i <= value ? '#fbbf24' : 'var(--border2)'
+    color: i <= value ? '#FFC65C' : 'var(--border2)'
   }
 }, i <= value ? /*#__PURE__*/React.createElement(I, {
   n: "Star",
   s: size,
-  c: "#fbbf24"
+  c: "#FFC65C"
 }) : /*#__PURE__*/React.createElement(I, {
   n: "StarOutline",
   s: size,
@@ -2069,24 +2095,24 @@ function MapModal({
           styles: [{
             elementType: 'geometry',
             stylers: [{
-              color: '#0a1120'
+              color: '#0C1119'
             }]
           }, {
             elementType: 'labels.text.fill',
             stylers: [{
-              color: '#8899bb'
+              color: '#8A99B3'
             }]
           }, {
             featureType: 'road',
             elementType: 'geometry',
             stylers: [{
-              color: '#1a2538'
+              color: '#18222f'
             }]
           }, {
             featureType: 'water',
             elementType: 'geometry',
             stylers: [{
-              color: '#050a14'
+              color: '#080C13'
             }]
           }, {
             featureType: 'poi',
@@ -2104,14 +2130,14 @@ function MapModal({
             icon: {
               path: window.google.maps.SymbolPath.CIRCLE,
               scale: 10,
-              fillColor: '#4ade80',
+              fillColor: '#4FE58A',
               fillOpacity: 1,
-              strokeColor: '#050a14',
+              strokeColor: '#080C13',
               strokeWeight: 2
             }
           });
           const info = new window.google.maps.InfoWindow({
-            content: `<div style="color:#0a1120;font-family:sans-serif;padding:4px"><strong>${item.name}</strong><br/><small>${item.sub || ''}</small></div>`
+            content: `<div style="color:#0C1119;font-family:sans-serif;padding:4px"><strong>${item.name}</strong><br/><small>${item.sub || ''}</small></div>`
           });
           marker.addListener('click', () => info.open(map, marker));
         });
@@ -2417,12 +2443,12 @@ function LoginScreen({
     }
   }, "The platform for tennis players")), error && /*#__PURE__*/React.createElement("div", {
     style: {
-      background: 'rgba(248,113,113,0.1)',
-      border: '1px solid rgba(248,113,113,0.3)',
+      background: 'rgba(255,107,107,0.1)',
+      border: '1px solid rgba(255,107,107,0.3)',
       borderRadius: 'var(--radius2)',
       padding: '12px 16px',
       marginBottom: '20px',
-      color: '#f87171',
+      color: '#FF6B6B',
       fontSize: '14px'
     }
   }, error), mode === 'signup' && /*#__PURE__*/React.createElement("div", {
@@ -2584,6 +2610,60 @@ function HomeScreen({
     });
   };
   const stats = (userProfile === null || userProfile === void 0 ? void 0 : userProfile.stats) || {};
+  // Court time is the hero metric everywhere — stored as whole minutes.
+  const fmtCourtTime = mins => {
+    const m = Math.max(0, Math.round(mins || 0));
+    return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+  };
+  const monoDate = new Date().toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric'
+  }).replace(',', ' ·');
+  const next = upcomingEvents[0];
+  const relTime = ts => {
+    if (!ts) return '';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    const mins = Math.round((d - new Date()) / 60000);
+    if (mins < 0) return 'now';
+    if (mins < 60) return `in ${mins} min`;
+    if (mins < 1440) return `in ${Math.round(mins / 60)}h`;
+    return d.toLocaleDateString('en-US', {
+      weekday: 'short'
+    });
+  };
+  const clockOf = ts => {
+    if (!ts) return '';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  };
+  const statTrio = [{
+    label: 'Court time',
+    value: fmtCourtTime(stats.totalPlayTime),
+    gold: false
+  }, {
+    label: 'Wins',
+    value: stats.totalWins || 0,
+    gold: false
+  }, {
+    label: 'Reigns',
+    value: stats.reigns !== undefined ? stats.reigns : stats.totalWinners || 0,
+    gold: true
+  }];
+  const tiles = [{
+    icon: 'Users',
+    title: 'Players',
+    meta: 'Find people nearby',
+    go: () => setScreen('players')
+  }, {
+    icon: 'MapPin',
+    title: 'Book a court',
+    meta: 'Courts near you',
+    go: () => setScreen('courts')
+  }];
   return /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: '100vh',
@@ -2596,322 +2676,349 @@ function HomeScreen({
       margin: '0 auto',
       padding: '24px 20px'
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  },
+  // ── Header: mono date eyebrow over greeting, avatar right ──
+  /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: '32px'
+      marginBottom: '26px'
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "eyebrow-mono",
     style: {
-      fontSize: '13px',
-      color: 'var(--text2)',
-      marginBottom: '4px'
+      letterSpacing: '.14em',
+      fontSize: '11px',
+      marginBottom: '7px'
     }
-  }, greeting(), ","), /*#__PURE__*/React.createElement("h1", {
+  }, monoDate), /*#__PURE__*/React.createElement("h1", {
     style: {
       margin: 0,
-      fontSize: '24px',
-      fontWeight: '800',
-      letterSpacing: '-0.03em'
+      font: "800 27px/1 'DM Sans', sans-serif",
+      letterSpacing: '-0.035em',
+      color: 'var(--text)'
     }
-  }, (userProfile === null || userProfile === void 0 ? void 0 : userProfile.firstName) || 'Player', " \uD83D\uDC4B")), /*#__PURE__*/React.createElement("div", {
+  }, greeting().replace('Good ', '').replace(/^./, c => c.toUpperCase()), ", ", (userProfile === null || userProfile === void 0 ? void 0 : userProfile.firstName) || 'Player')), /*#__PURE__*/React.createElement("div", {
     onClick: () => setScreen('profile'),
     style: {
       cursor: 'pointer',
-      borderRadius: '50%',
+      borderRadius: '99px',
       transition: 'opacity 0.15s'
     },
     onMouseEnter: e => e.currentTarget.style.opacity = '0.8',
     onMouseLeave: e => e.currentTarget.style.opacity = '1'
   }, /*#__PURE__*/React.createElement(Avatar, {
     src: userProfile === null || userProfile === void 0 ? void 0 : userProfile.photoURL,
-    name: `${userProfile === null || userProfile === void 0 ? void 0 : userProfile.firstName} ${userProfile === null || userProfile === void 0 ? void 0 : userProfile.lastName}`,
-    size: 44
-  }))), /*#__PURE__*/React.createElement("div", {
+    name: `${(userProfile === null || userProfile === void 0 ? void 0 : userProfile.firstName) || ''} ${(userProfile === null || userProfile === void 0 ? void 0 : userProfile.lastName) || ''}`,
+    size: 46
+  }))),
+  // ── Start card: the one-tap entry into a session ──
+  /*#__PURE__*/React.createElement("div", {
+    onClick: () => setShowInstantGame(true),
+    style: {
+      position: 'relative',
+      overflow: 'hidden',
+      borderRadius: '22px',
+      padding: '22px',
+      background: 'linear-gradient(145deg, var(--accent) 0%, var(--accent2) 100%)',
+      cursor: 'pointer',
+      marginBottom: '14px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'absolute',
+      width: '150px',
+      height: '150px',
+      borderRadius: '99px',
+      border: '1.5px solid rgba(6,20,12,.18)',
+      right: '-38px',
+      top: '-42px',
+      pointerEvents: 'none'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'absolute',
+      width: '150px',
+      height: '150px',
+      borderRadius: '99px',
+      border: '1.5px solid rgba(6,20,12,.14)',
+      right: '-14px',
+      top: '-70px',
+      pointerEvents: 'none'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'relative'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "600 10px/1 var(--mono)",
+      letterSpacing: '.16em',
+      textTransform: 'uppercase',
+      color: 'rgba(4,23,12,.65)',
+      marginBottom: '9px'
+    }
+  }, "Start a game"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "800 25px/1 'DM Sans', sans-serif",
+      letterSpacing: '-0.03em',
+      color: 'var(--accent-ink)',
+      marginBottom: '8px'
+    }
+  }, "King's Court"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+      gap: '14px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "400 13px/1.5 'DM Sans', sans-serif",
+      color: 'rgba(4,23,12,.72)',
+      maxWidth: '230px'
+    }
+  }, "Pick your players. Tap the winners. We keep the clock."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '38px',
+      height: '38px',
+      borderRadius: '99px',
+      background: 'var(--accent-ink)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "ChevronRight",
+    s: 20,
+    c: "var(--accent)"
+  }))))),
+  // ── Stat trio: every numeral in mono ──
+  /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: '1fr 1fr 1fr',
-      gap: '10px',
-      marginBottom: '28px'
+      gap: '8px',
+      marginBottom: '26px'
     }
-  }, [{
-    label: 'Games',
-    value: stats.gamesPlayed || 0,
-    icon: 'Activity'
-  }, {
-    label: 'Wins',
-    value: stats.totalWins || 0,
-    icon: 'Award'
-  }, {
-    label: 'Winners',
-    value: stats.totalWinners || 0,
-    icon: 'Zap'
-  }].map(s => /*#__PURE__*/React.createElement("div", {
+  }, statTrio.map(s => /*#__PURE__*/React.createElement("div", {
     key: s.label,
     style: {
       background: 'var(--surface)',
       border: '1px solid var(--border)',
       borderRadius: 'var(--radius2)',
-      padding: '16px 12px',
+      padding: '15px 12px',
       textAlign: 'center'
     }
   }, /*#__PURE__*/React.createElement("div", {
+    className: "mono",
     style: {
-      display: 'flex',
-      justifyContent: 'center',
-      marginBottom: '8px'
-    }
-  }, /*#__PURE__*/React.createElement(I, {
-    n: s.icon,
-    s: 18,
-    c: "var(--text3)"
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: '700',
-      fontSize: '22px',
-      letterSpacing: '-0.02em'
+      font: "400 20px/1 var(--mono)",
+      color: s.gold ? 'var(--gold)' : 'var(--text)',
+      marginBottom: '7px'
     }
   }, s.value), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: '11px',
-      color: 'var(--text2)',
-      marginTop: '2px',
-      fontWeight: '500'
-    }
-  }, s.label)))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: '28px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '13px',
-      fontWeight: '600',
-      color: 'var(--text2)',
-      letterSpacing: '0.05em',
+      font: "500 10px/1 'DM Sans', sans-serif",
+      letterSpacing: '.08em',
       textTransform: 'uppercase',
-      marginBottom: '14px'
+      color: 'var(--text3)'
     }
-  }, "Quick Actions"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: '10px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    onClick: () => setShowInstantGame(true),
-    style: {
-      background: 'var(--accent)',
-      borderRadius: 'var(--radius)',
-      padding: '20px',
-      cursor: 'pointer',
-      position: 'relative',
-      overflow: 'hidden'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: 'absolute',
-      top: '-20px',
-      right: '-20px',
-      width: '80px',
-      height: '80px',
-      borderRadius: '50%',
-      background: 'rgba(0,0,0,0.1)'
-    }
-  }), /*#__PURE__*/React.createElement(I, {
-    n: "Zap",
-    s: 24,
-    c: "#050a14"
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: '12px',
-      fontWeight: '700',
-      fontSize: '15px',
-      color: '#050a14'
-    }
-  }, "Instant Game"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '12px',
-      color: 'rgba(5,10,20,0.6)',
-      marginTop: '2px'
-    }
-  }, "Start now")), /*#__PURE__*/React.createElement("div", {
-    onClick: onCreateEvent,
-    style: {
-      background: 'var(--surface)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius)',
-      padding: '20px',
-      cursor: 'pointer'
-    }
-  }, /*#__PURE__*/React.createElement(I, {
-    n: "Calendar",
-    s: 24,
-    c: "var(--text2)"
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: '12px',
-      fontWeight: '700',
-      fontSize: '15px'
-    }
-  }, "Host a Game"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '12px',
-      color: 'var(--text2)',
-      marginTop: '2px'
-    }
-  }, "Plan ahead")), /*#__PURE__*/React.createElement("div", {
-    onClick: () => setScreen('courts'),
-    style: {
-      background: 'var(--surface)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius)',
-      padding: '20px',
-      cursor: 'pointer'
-    }
-  }, /*#__PURE__*/React.createElement(I, {
-    n: "Court",
-    s: 24,
-    c: "var(--text2)"
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: '12px',
-      fontWeight: '700',
-      fontSize: '15px'
-    }
-  }, "Find Courts"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '12px',
-      color: 'var(--text2)',
-      marginTop: '2px'
-    }
-  }, "Near you")), /*#__PURE__*/React.createElement("div", {
-    onClick: () => setScreen('coaches'),
-    style: {
-      background: 'var(--surface)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius)',
-      padding: '20px',
-      cursor: 'pointer'
-    }
-  }, /*#__PURE__*/React.createElement(I, {
-    n: "Award",
-    s: 24,
-    c: "var(--text2)"
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: '12px',
-      fontWeight: '700',
-      fontSize: '15px'
-    }
-  }, "Find Coaches"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '12px',
-      color: 'var(--text2)',
-      marginTop: '2px'
-    }
-  }, "Book a session")))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, s.label)))),
+  // ── Tonight ──
+  /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: '14px'
+      marginBottom: '12px'
     }
   }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '13px',
-      fontWeight: '600',
-      color: 'var(--text2)',
-      letterSpacing: '0.05em',
-      textTransform: 'uppercase'
-    }
-  }, "Upcoming"), /*#__PURE__*/React.createElement(Btn, {
+    className: "eyebrow"
+  }, next ? 'Tonight' : 'Upcoming'), /*#__PURE__*/React.createElement("div", {
     onClick: () => setScreen('events'),
-    variant: "ghost",
-    size: "sm"
-  }, "See all")), loading ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "600 13px/1 'DM Sans', sans-serif",
+      color: 'var(--accent)',
+      cursor: 'pointer'
+    }
+  }, "All games")), loading ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
       padding: '32px',
       color: 'var(--text3)'
     }
-  }, "Loading...") : upcomingEvents.length === 0 ? /*#__PURE__*/React.createElement(Empty, {
+  }, "Loading…") : !next ? /*#__PURE__*/React.createElement(Empty, {
     icon: "Calendar",
     title: "No upcoming games",
-    sub: "Create one or join an existing game",
+    sub: "Host one or join an existing game",
     action: /*#__PURE__*/React.createElement(Btn, {
       onClick: onCreateEvent,
       size: "sm"
-    }, "Create Game")
-  }) : upcomingEvents.map(e => {
+    }, "Host a game")
+  }) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '10px',
+      marginBottom: '26px'
+    }
+  }, upcomingEvents.map(e => {
     const going = (e.rsvps || []).filter(r => r.status === 'going');
-    return /*#__PURE__*/React.createElement(Card, {
+    const shown = going.slice(0, 4);
+    const extra = going.length - shown.length;
+    const mine = going.some(r => r.oderId === (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid));
+    return /*#__PURE__*/React.createElement("div", {
       key: e.id,
       onClick: () => onViewEvent(e.id),
       style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '14px'
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: '16px',
+        padding: '16px',
+        cursor: 'pointer'
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
-        width: '48px',
-        height: '48px',
-        borderRadius: '14px',
-        background: 'var(--accent3)',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0
+        gap: '7px',
+        marginBottom: '9px'
       }
-    }, /*#__PURE__*/React.createElement(I, {
-      n: "Calendar",
-      s: 22,
-      c: "var(--accent)"
-    })), /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("span", {
       style: {
-        flex: 1,
-        minWidth: 0
+        width: '6px',
+        height: '6px',
+        borderRadius: '99px',
+        background: 'var(--accent)',
+        flex: 'none'
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    }), /*#__PURE__*/React.createElement("span", {
+      className: "mono",
       style: {
-        fontWeight: '600',
-        fontSize: '15px',
-        marginBottom: '3px',
+        font: "400 12px/1 var(--mono)",
+        color: 'var(--accent)'
+      }
+    }, clockOf(e.dateTime), " \xB7 ", relTime(e.dateTime))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        font: "700 17px/1.2 'DM Sans', sans-serif",
+        letterSpacing: '-0.02em',
+        color: 'var(--text)',
+        marginBottom: '4px',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap'
       }
     }, e.title), /*#__PURE__*/React.createElement("div", {
       style: {
-        fontSize: '13px',
-        color: 'var(--text2)'
+        font: "400 13px/1.4 'DM Sans', sans-serif",
+        color: 'var(--text2)',
+        marginBottom: '13px',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
       }
-    }, fmtDate(e.dateTime))), /*#__PURE__*/React.createElement("div", {
+    }, e.location || 'Location TBD'), /*#__PURE__*/React.createElement("div", {
       style: {
-        textAlign: 'right',
-        flexShrink: 0
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '12px'
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
-        fontWeight: '700',
-        fontSize: '16px'
+        display: 'flex',
+        alignItems: 'center'
       }
-    }, going.length), /*#__PURE__*/React.createElement("div", {
+    }, shown.map((p, i) => /*#__PURE__*/React.createElement("div", {
+      key: p.oderId || i,
       style: {
-        fontSize: '11px',
+        marginLeft: i === 0 ? 0 : '-9px',
+        borderRadius: '99px',
+        border: '2px solid var(--surface)',
+        display: 'flex'
+      }
+    }, /*#__PURE__*/React.createElement(Avatar, {
+      src: p.photoURL,
+      name: p.firstName || p.userName,
+      size: 30
+    }))), extra > 0 && /*#__PURE__*/React.createElement("div", {
+      className: "mono",
+      style: {
+        marginLeft: '-9px',
+        width: '30px',
+        height: '30px',
+        borderRadius: '99px',
+        background: 'var(--surface2)',
+        border: '2px solid var(--surface)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        font: "400 11px/1 var(--mono)",
         color: 'var(--text2)'
       }
-    }, "players")));
-  }))), showInstantGame && /*#__PURE__*/React.createElement(InstantGameModal, {
+    }, "+", extra), going.length === 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        font: "400 12px/1 'DM Sans', sans-serif",
+        color: 'var(--text3)'
+      }
+    }, "No one yet")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 'none',
+        height: '36px',
+        padding: '0 16px',
+        borderRadius: '11px',
+        display: 'flex',
+        alignItems: 'center',
+        background: mine ? 'var(--accent)' : 'var(--surface2)',
+        color: mine ? 'var(--accent-ink)' : 'var(--text2)',
+        font: "600 13px/1 'DM Sans', sans-serif"
+      }
+    }, mine ? 'Going' : 'View')));
+  })),
+  // ── Two tiles ──
+  /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: '10px'
+    }
+  }, tiles.map(t => /*#__PURE__*/React.createElement("div", {
+    key: t.title,
+    onClick: t.go,
+    style: {
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: '16px',
+      padding: '16px',
+      cursor: 'pointer'
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: t.icon,
+    s: 20,
+    c: "var(--accent)"
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: '26px',
+      font: "700 15px/1.2 'DM Sans', sans-serif",
+      letterSpacing: '-0.01em',
+      color: 'var(--text)',
+      marginBottom: '3px'
+    }
+  }, t.title), /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "400 12px/1.3 'DM Sans', sans-serif",
+      color: 'var(--text3)'
+    }
+  }, t.meta))))), showInstantGame && /*#__PURE__*/React.createElement(InstantGameModal, {
     onClose: players => {
       setShowInstantGame(false);
       if (players && players.length > 0) onInstantGame(players);
     }
   }));
 }
-
 // ==================== INSTANT GAME MODAL ====================
 function InstantGameModal({
   onClose
@@ -3077,7 +3184,7 @@ function InstantGameModal({
       alignItems: 'center',
       gap: '6px',
       background: 'var(--accent3)',
-      border: '1px solid rgba(74,222,128,0.4)',
+      border: '1px solid rgba(79,229,138,0.4)',
       borderRadius: '20px',
       padding: '5px 10px 5px 8px',
       cursor: 'pointer',
@@ -3094,7 +3201,7 @@ function InstantGameModal({
       width: '20px',
       height: '20px',
       borderRadius: '50%',
-      background: 'rgba(74,222,128,0.3)',
+      background: 'rgba(79,229,138,0.3)',
       display: 'inline-flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -3166,7 +3273,7 @@ function InstantGameModal({
     }, /*#__PURE__*/React.createElement(I, {
       n: "Check",
       s: 12,
-      c: "#050a14"
+      c: "var(--accent-ink)"
     })));
   }))), /*#__PURE__*/React.createElement(Btn, {
     onClick: startGame,
@@ -3175,7 +3282,7 @@ function InstantGameModal({
     icon: "Zap",
     style: {
       background: 'var(--accent)',
-      color: '#050a14'
+      color: 'var(--accent-ink)'
     }
   }, loading ? 'Starting...' : `Start Instant Game${selected.length > 0 ? ` · ${selected.length + 1} players` : ''}`));
 }
@@ -3499,19 +3606,19 @@ function EventsScreen({
       borderRadius: '50%',
       background: 'var(--accent)',
       border: 'none',
-      color: '#050a14',
+      color: 'var(--accent-ink)',
       fontSize: '24px',
       cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      boxShadow: '0 4px 20px rgba(74,222,128,0.4)',
+      boxShadow: '0 4px 20px rgba(79,229,138,0.4)',
       zIndex: 100
     }
   }, /*#__PURE__*/React.createElement(I, {
     n: "Plus",
     s: 22,
-    c: "#050a14"
+    c: "var(--accent-ink)"
   }))));
 }
 
@@ -3801,10 +3908,10 @@ function CreateEventScreen({
 
   // accent color map (inline CSS vars don't concat well, use raw values)
   const accentColors = {
-    amber: '#fbbf24',
+    amber: '#FFC65C',
     blue: '#60a5fa',
-    green: '#4ade80',
-    red: '#f87171'
+    green: '#4FE58A',
+    red: '#FF6B6B'
   };
 
   // Reusable setting row with toggle
@@ -3840,7 +3947,7 @@ function CreateEventScreen({
         width: '36px',
         height: '36px',
         borderRadius: '10px',
-        background: on ? col + '22' : '#1a2538',
+        background: on ? col + '22' : '#18222f',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -3849,17 +3956,17 @@ function CreateEventScreen({
     }, /*#__PURE__*/React.createElement(I, {
       n: icon,
       s: 17,
-      c: on ? col : '#4a5878'
+      c: on ? col : '#56637C'
     })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: '14px',
         fontWeight: '600',
-        color: '#f0f4ff'
+        color: '#EDF2FA'
       }
     }, title), /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: '12px',
-        color: '#8899bb',
+        color: '#8A99B3',
         marginTop: '1px'
       }
     }, sub))), /*#__PURE__*/React.createElement(Toggle, {
@@ -3889,18 +3996,18 @@ function CreateEventScreen({
     }, saving ? 'Saving...' : 'Save')
   }), error && /*#__PURE__*/React.createElement("div", {
     style: {
-      background: 'rgba(248,113,113,0.1)',
-      border: '1px solid rgba(248,113,113,0.3)',
+      background: 'rgba(255,107,107,0.1)',
+      border: '1px solid rgba(255,107,107,0.3)',
       borderRadius: 'var(--radius2)',
       padding: '12px 16px',
       marginBottom: '16px',
-      color: '#f87171',
+      color: '#FF6B6B',
       fontSize: '14px'
     }
   }, error), savedMsg && /*#__PURE__*/React.createElement("div", {
     style: {
       background: 'var(--accent3)',
-      border: '1px solid rgba(74,222,128,0.3)',
+      border: '1px solid rgba(79,229,138,0.3)',
       borderRadius: 'var(--radius2)',
       padding: '10px 14px',
       marginBottom: '14px',
@@ -3989,7 +4096,7 @@ function CreateEventScreen({
       alignItems: 'center',
       gap: '5px',
       background: 'transparent',
-      border: '1px dashed rgba(74,222,128,0.4)',
+      border: '1px dashed rgba(79,229,138,0.4)',
       borderRadius: '20px',
       padding: '6px 12px',
       color: 'var(--accent)',
@@ -4141,8 +4248,8 @@ function CreateEventScreen({
       coach: null
     })),
     style: {
-      background: 'rgba(248,113,113,0.1)',
-      border: '1px solid rgba(248,113,113,0.2)',
+      background: 'rgba(255,107,107,0.1)',
+      border: '1px solid rgba(255,107,107,0.2)',
       borderRadius: '8px',
       padding: '6px 10px',
       color: 'var(--red)',
@@ -4337,7 +4444,7 @@ function CreateEventScreen({
       borderRadius: 'var(--radius2)',
       background: manualCoachName.trim() ? 'var(--accent)' : 'var(--surface2)',
       border: 'none',
-      color: manualCoachName.trim() ? '#050a14' : 'var(--text3)',
+      color: manualCoachName.trim() ? 'var(--accent-ink)' : 'var(--text3)',
       fontSize: '14px',
       fontWeight: '700',
       cursor: manualCoachName.trim() ? 'pointer' : 'default'
@@ -4360,19 +4467,19 @@ function CreateEventScreen({
       display: 'flex',
       alignItems: 'center',
       gap: '6px',
-      background: u.manual ? 'rgba(251,191,36,0.1)' : 'var(--accent3)',
-      border: `1px solid ${u.manual ? 'rgba(251,191,36,0.3)' : 'rgba(74,222,128,0.35)'}`,
+      background: u.manual ? 'rgba(255,198,92,0.1)' : 'var(--accent3)',
+      border: `1px solid ${u.manual ? 'rgba(255,198,92,0.3)' : 'rgba(79,229,138,0.35)'}`,
       borderRadius: '20px',
       padding: '5px 10px 5px 7px',
       cursor: 'pointer',
       fontSize: '13px',
-      color: u.manual ? '#fbbf24' : 'var(--accent)',
+      color: u.manual ? '#FFC65C' : 'var(--accent)',
       fontWeight: '600'
     }
   }, u.manual ? /*#__PURE__*/React.createElement(I, {
     n: "UserPlus",
     s: 13,
-    c: "#fbbf24"
+    c: "#FFC65C"
   }) : /*#__PURE__*/React.createElement(Avatar, {
     src: u.photoURL,
     name: `${u.firstName} ${u.lastName}`,
@@ -4497,7 +4604,7 @@ function CreateEventScreen({
     }, /*#__PURE__*/React.createElement(I, {
       n: "Check",
       s: 13,
-      c: "#050a14"
+      c: "var(--accent-ink)"
     })) : /*#__PURE__*/React.createElement("div", {
       style: {
         width: '22px',
@@ -4599,7 +4706,7 @@ function CreateEventScreen({
       borderRadius: 'var(--radius2)',
       background: manualPlayerName.trim() ? 'var(--accent)' : 'var(--surface2)',
       border: 'none',
-      color: manualPlayerName.trim() ? '#050a14' : 'var(--text3)',
+      color: manualPlayerName.trim() ? 'var(--accent-ink)' : 'var(--text3)',
       fontSize: '14px',
       fontWeight: '700',
       cursor: manualPlayerName.trim() ? 'pointer' : 'default'
@@ -4905,7 +5012,7 @@ function DatePickerModal({
       border: 'none',
       borderRadius: '10px',
       padding: '8px 16px',
-      color: '#050a14',
+      color: 'var(--accent-ink)',
       fontSize: '14px',
       fontWeight: '700',
       cursor: 'pointer'
@@ -5002,7 +5109,7 @@ function DatePickerModal({
       fontWeight: isSel(day) ? '800' : '500',
       cursor: day && !isPast(day) ? 'pointer' : 'default',
       background: isSel(day) ? 'var(--accent)' : isToday(day) ? 'var(--accent3)' : 'transparent',
-      color: !day ? 'transparent' : isPast(day) ? 'var(--text3)' : isSel(day) ? '#050a14' : 'var(--text)',
+      color: !day ? 'transparent' : isPast(day) ? 'var(--text3)' : isSel(day) ? 'var(--accent-ink)' : 'var(--text)',
       border: isToday(day) && !isSel(day) ? '1px solid var(--accent)' : 'none',
       transition: 'background 0.1s'
     }
@@ -5075,7 +5182,7 @@ function TimePickerModal({
       border: 'none',
       borderRadius: '10px',
       padding: '8px 16px',
-      color: '#050a14',
+      color: 'var(--accent-ink)',
       fontSize: '14px',
       fontWeight: '700',
       cursor: 'pointer'
@@ -5234,7 +5341,7 @@ function TimePickerModal({
       borderRadius: 'var(--radius2)',
       background: selAmpm === p ? 'var(--accent)' : 'var(--surface2)',
       border: `1px solid ${selAmpm === p ? 'var(--accent)' : 'var(--border)'}`,
-      color: selAmpm === p ? '#050a14' : 'var(--text2)',
+      color: selAmpm === p ? 'var(--accent-ink)' : 'var(--text2)',
       fontSize: '14px',
       fontWeight: '800',
       cursor: 'pointer',
@@ -5336,7 +5443,7 @@ function CalendarModal({
       fontWeight: '500',
       cursor: day && !isPast(day) ? 'pointer' : 'default',
       background: isSel(day) ? 'var(--accent)' : isToday(day) ? 'var(--accent3)' : 'transparent',
-      color: day ? isPast(day) ? 'var(--text3)' : isSel(day) ? '#050a14' : 'var(--text)' : 'transparent',
+      color: day ? isPast(day) ? 'var(--text3)' : isSel(day) ? 'var(--accent-ink)' : 'var(--text)' : 'transparent',
       border: isToday(day) && !isSel(day) ? '1px solid var(--accent)' : 'none'
     }
   }, day))));
@@ -6306,8 +6413,8 @@ function EventDetailScreen({
     c: "#93c5fd"
   }), "Coach: ", /*#__PURE__*/React.createElement("strong", null, event.coachName)))), event.cancelled && /*#__PURE__*/React.createElement("div", {
     style: {
-      background: 'rgba(248,113,113,0.12)',
-      border: '1px solid rgba(248,113,113,0.3)',
+      background: 'rgba(255,107,107,0.12)',
+      border: '1px solid rgba(255,107,107,0.3)',
       borderRadius: 'var(--radius2)',
       padding: '12px 16px',
       marginBottom: '16px',
@@ -6387,8 +6494,8 @@ function EventDetailScreen({
       width: '100%',
       padding: '14px',
       borderRadius: 'var(--radius)',
-      background: 'rgba(248,113,113,0.08)',
-      border: '1px solid rgba(248,113,113,0.3)',
+      background: 'rgba(255,107,107,0.08)',
+      border: '1px solid rgba(255,107,107,0.3)',
       color: 'var(--red)',
       fontWeight: '600',
       fontSize: '14px',
@@ -6401,7 +6508,7 @@ function EventDetailScreen({
       padding: '16px',
       borderRadius: 'var(--radius)',
       background: 'var(--accent)',
-      color: '#050a14',
+      color: 'var(--accent-ink)',
       fontWeight: '700',
       fontSize: '16px',
       cursor: 'pointer',
@@ -6413,7 +6520,7 @@ function EventDetailScreen({
       padding: '16px',
       borderRadius: 'var(--radius)',
       background: 'var(--accent)',
-      color: '#050a14',
+      color: 'var(--accent-ink)',
       fontWeight: '700',
       fontSize: '16px',
       cursor: 'default',
@@ -6426,7 +6533,7 @@ function EventDetailScreen({
   }, /*#__PURE__*/React.createElement(I, {
     n: "Check",
     s: 18,
-    c: "#050a14"
+    c: "var(--accent-ink)"
   }), " You're Going!"), !isHost && isOnWaitlist && /*#__PURE__*/React.createElement("div", {
     style: {
       width: '100%',
@@ -6519,7 +6626,7 @@ function EventDetailScreen({
     }, /*#__PURE__*/React.createElement(I, {
       n: "Star",
       s: 8,
-      c: "#050a14"
+      c: "var(--accent-ink)"
     }))), /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: '10px',
@@ -6537,8 +6644,8 @@ function EventDetailScreen({
       marginBottom: '16px',
       padding: '10px 14px',
       borderRadius: 'var(--radius2)',
-      background: 'rgba(248,113,113,0.08)',
-      border: '1px solid rgba(248,113,113,0.3)',
+      background: 'rgba(255,107,107,0.08)',
+      border: '1px solid rgba(255,107,107,0.3)',
       color: 'var(--red)',
       fontSize: '13px',
       fontWeight: '600'
@@ -6713,8 +6820,8 @@ function EventDetailScreen({
       style: {
         padding: '3px 7px',
         borderRadius: 'var(--radius3)',
-        background: 'rgba(248,113,113,0.08)',
-        border: '1px solid rgba(248,113,113,0.3)',
+        background: 'rgba(255,107,107,0.08)',
+        border: '1px solid rgba(255,107,107,0.3)',
         color: 'var(--red)',
         fontSize: '11px',
         cursor: 'pointer'
@@ -6801,7 +6908,7 @@ function EventDetailScreen({
       alignItems: 'center',
       gap: '8px',
       padding: '10px 14px',
-      background: 'rgba(74,222,128,0.05)',
+      background: 'rgba(79,229,138,0.05)',
       borderBottom: '1px solid var(--border)'
     }
   }, /*#__PURE__*/React.createElement(I, {
@@ -6896,7 +7003,7 @@ function EventDetailScreen({
   }, /*#__PURE__*/React.createElement(I, {
     n: "Send",
     s: 15,
-    c: commentText.trim() ? '#050a14' : 'var(--text3)'
+    c: commentText.trim() ? 'var(--accent-ink)' : 'var(--text3)'
   }))), showMentions && mentionSuggestions.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'absolute',
@@ -7156,7 +7263,7 @@ function EventDetailScreen({
         borderRadius: 'var(--radius3)',
         background: 'var(--accent)',
         border: 'none',
-        color: '#050a14',
+        color: 'var(--accent-ink)',
         fontSize: '12px',
         fontWeight: '700',
         cursor: 'pointer'
@@ -7199,7 +7306,7 @@ function EventDetailScreen({
         background: 'none',
         border: 'none',
         cursor: 'pointer',
-        color: liked ? '#f87171' : 'var(--text3)',
+        color: liked ? '#FF6B6B' : 'var(--text3)',
         fontSize: '12px',
         fontWeight: '600',
         padding: 0,
@@ -7246,10 +7353,10 @@ function EventDetailScreen({
       }
     }, children);
     const accentColors = {
-      amber: '#fbbf24',
+      amber: '#FFC65C',
       blue: '#60a5fa',
-      green: '#4ade80',
-      red: '#f87171'
+      green: '#4FE58A',
+      red: '#FF6B6B'
     };
     const EditSettingRow = ({
       icon,
@@ -7283,7 +7390,7 @@ function EventDetailScreen({
           width: '36px',
           height: '36px',
           borderRadius: '10px',
-          background: on ? col + '22' : '#1a2538',
+          background: on ? col + '22' : '#18222f',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -7292,17 +7399,17 @@ function EventDetailScreen({
       }, /*#__PURE__*/React.createElement(I, {
         n: icon,
         s: 17,
-        c: on ? col : '#4a5878'
+        c: on ? col : '#56637C'
       })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: '14px',
           fontWeight: '600',
-          color: '#f0f4ff'
+          color: '#EDF2FA'
         }
       }, title), /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: '12px',
-          color: '#8899bb',
+          color: '#8A99B3',
           marginTop: '1px'
         }
       }, sub))), /*#__PURE__*/React.createElement(Toggle, {
@@ -7392,7 +7499,7 @@ function EventDetailScreen({
         border: 'none',
         borderRadius: '10px',
         padding: '8px 16px',
-        color: '#050a14',
+        color: 'var(--accent-ink)',
         fontSize: '14px',
         fontWeight: '700',
         cursor: 'pointer',
@@ -7536,8 +7643,8 @@ function EventDetailScreen({
         coach: null
       })),
       style: {
-        background: 'rgba(248,113,113,0.1)',
-        border: '1px solid rgba(248,113,113,0.2)',
+        background: 'rgba(255,107,107,0.1)',
+        border: '1px solid rgba(255,107,107,0.2)',
         borderRadius: '8px',
         padding: '6px 10px',
         color: 'var(--red)',
@@ -7732,7 +7839,7 @@ function EventDetailScreen({
         borderRadius: 'var(--radius2)',
         background: editManualCoachName.trim() ? 'var(--accent)' : 'var(--surface2)',
         border: 'none',
-        color: editManualCoachName.trim() ? '#050a14' : 'var(--text3)',
+        color: editManualCoachName.trim() ? 'var(--accent-ink)' : 'var(--text3)',
         fontSize: '14px',
         fontWeight: '700',
         cursor: editManualCoachName.trim() ? 'pointer' : 'default'
@@ -7755,19 +7862,19 @@ function EventDetailScreen({
         display: 'flex',
         alignItems: 'center',
         gap: '6px',
-        background: u.manual ? 'rgba(251,191,36,0.1)' : 'var(--accent3)',
-        border: `1px solid ${u.manual ? 'rgba(251,191,36,0.3)' : 'rgba(74,222,128,0.35)'}`,
+        background: u.manual ? 'rgba(255,198,92,0.1)' : 'var(--accent3)',
+        border: `1px solid ${u.manual ? 'rgba(255,198,92,0.3)' : 'rgba(79,229,138,0.35)'}`,
         borderRadius: '20px',
         padding: '5px 10px 5px 7px',
         cursor: 'pointer',
         fontSize: '13px',
-        color: u.manual ? '#fbbf24' : 'var(--accent)',
+        color: u.manual ? '#FFC65C' : 'var(--accent)',
         fontWeight: '600'
       }
     }, u.manual ? /*#__PURE__*/React.createElement(I, {
       n: "UserPlus",
       s: 13,
-      c: "#fbbf24"
+      c: "#FFC65C"
     }) : /*#__PURE__*/React.createElement(Avatar, {
       src: u.photoURL,
       name: `${u.firstName} ${u.lastName}`,
@@ -7892,7 +7999,7 @@ function EventDetailScreen({
       }, /*#__PURE__*/React.createElement(I, {
         n: "Check",
         s: 13,
-        c: "#050a14"
+        c: "var(--accent-ink)"
       })) : /*#__PURE__*/React.createElement("div", {
         style: {
           width: '22px',
@@ -7975,7 +8082,7 @@ function EventDetailScreen({
         borderRadius: 'var(--radius2)',
         background: editManualPlayerName.trim() ? 'var(--accent)' : 'var(--surface2)',
         border: 'none',
-        color: editManualPlayerName.trim() ? '#050a14' : 'var(--text3)',
+        color: editManualPlayerName.trim() ? 'var(--accent-ink)' : 'var(--text3)',
         fontSize: '14px',
         fontWeight: '700',
         cursor: editManualPlayerName.trim() ? 'pointer' : 'default'
@@ -8446,8 +8553,8 @@ function EventDetailScreen({
       flex: 1,
       padding: '13px',
       borderRadius: 'var(--radius)',
-      background: 'rgba(248,113,113,0.15)',
-      border: '1px solid rgba(248,113,113,0.4)',
+      background: 'rgba(255,107,107,0.15)',
+      border: '1px solid rgba(255,107,107,0.4)',
       color: 'var(--red)',
       fontSize: '14px',
       fontWeight: '700',
@@ -8570,7 +8677,7 @@ function CourtsScreen({
       gap: '12px',
       padding: '14px 16px',
       background: 'var(--accent3)',
-      border: '1px solid rgba(74,222,128,0.2)',
+      border: '1px solid rgba(79,229,138,0.2)',
       borderRadius: 'var(--radius2)',
       marginBottom: '16px'
     }
@@ -8710,12 +8817,12 @@ function CourtCard({
       display: 'flex',
       alignItems: 'center',
       gap: '3px',
-      color: '#fbbf24'
+      color: '#FFC65C'
     }
   }, /*#__PURE__*/React.createElement(I, {
     n: "Star",
     s: 12,
-    c: "#fbbf24"
+    c: "#FFC65C"
   }), court.avgRating.toFixed(1), court.reviewCount && ` (${court.reviewCount})`)), /*#__PURE__*/React.createElement("button", {
     onClick: e => {
       e.stopPropagation();
@@ -8723,7 +8830,7 @@ function CourtCard({
     },
     style: {
       background: 'var(--accent3)',
-      border: '1px solid rgba(74,222,128,0.2)',
+      border: '1px solid rgba(79,229,138,0.2)',
       borderRadius: 'var(--radius3)',
       padding: '5px 10px',
       cursor: 'pointer',
@@ -8865,7 +8972,7 @@ function CourtDetailModal({
   }, /*#__PURE__*/React.createElement(I, {
     n: "Star",
     s: 12,
-    c: "#fbbf24"
+    c: "#FFC65C"
   }), court.avgRating.toFixed(1)))), ((_court$amenities = court.amenities) === null || _court$amenities === void 0 ? void 0 : _court$amenities.length) > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: '20px'
@@ -9339,12 +9446,12 @@ function CoachCard({
       alignItems: 'center',
       gap: '3px',
       fontSize: '13px',
-      color: '#fbbf24'
+      color: '#FFC65C'
     }
   }, /*#__PURE__*/React.createElement(I, {
     n: "Star",
     s: 12,
-    c: "#fbbf24"
+    c: "#FFC65C"
   }), coach.avgRating.toFixed(1))), cp.title && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: '13px',
@@ -9397,7 +9504,7 @@ function CoachCard({
     },
     style: {
       background: 'var(--accent3)',
-      border: '1px solid rgba(74,222,128,0.2)',
+      border: '1px solid rgba(79,229,138,0.2)',
       borderRadius: 'var(--radius3)',
       padding: '4px 8px',
       cursor: 'pointer',
@@ -9979,7 +10086,7 @@ function DirectMessageModal({
         borderRadius: '10px',
         background: 'var(--accent)',
         border: 'none',
-        color: '#050a14',
+        color: 'var(--accent-ink)',
         fontSize: '12px',
         fontWeight: '700',
         cursor: 'pointer'
@@ -10003,7 +10110,7 @@ function DirectMessageModal({
         padding: '10px 14px',
         borderRadius: mine ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
         background: mine ? 'var(--accent)' : 'var(--surface)',
-        color: mine ? '#050a14' : 'var(--text)',
+        color: mine ? 'var(--accent-ink)' : 'var(--text)',
         fontSize: '14px',
         lineHeight: '1.45',
         fontWeight: mine ? '600' : '400'
@@ -10085,7 +10192,7 @@ function DirectMessageModal({
   }) : /*#__PURE__*/React.createElement(I, {
     n: "Send",
     s: 18,
-    c: text.trim() ? '#050a14' : 'var(--text3)'
+    c: text.trim() ? 'var(--accent-ink)' : 'var(--text3)'
   }))))));
 }
 
@@ -10105,12 +10212,12 @@ function PlayerProfileModal({
   const isCoach = (_player$roles = player.roles) === null || _player$roles === void 0 ? void 0 : _player$roles.includes('coach');
   const stats = player.stats || {};
   const skillColors = {
-    beginner: '#4ade80',
+    beginner: '#4FE58A',
     intermediate: '#60a5fa',
-    advanced: '#fbbf24',
-    pro: '#f87171'
+    advanced: '#FFC65C',
+    pro: '#FF6B6B'
   };
-  const skillColor = skillColors[player.skillLevel] || '#4ade80';
+  const skillColor = skillColors[player.skillLevel] || '#4FE58A';
   const fmtPhone = raw => {
     if (!raw) return null;
     const digits = raw.replace(/\D/g, '');
@@ -10190,7 +10297,7 @@ function PlayerProfileModal({
       width: '26px',
       height: '26px',
       borderRadius: '50%',
-      background: '#fbbf24',
+      background: '#FFC65C',
       border: '3px solid var(--bg2)',
       display: 'flex',
       alignItems: 'center',
@@ -10199,7 +10306,7 @@ function PlayerProfileModal({
   }, /*#__PURE__*/React.createElement(I, {
     n: "Crown",
     s: 12,
-    c: "#050a14"
+    c: "var(--accent-ink)"
   }))), /*#__PURE__*/React.createElement("h2", {
     style: {
       margin: '0 0 4px',
@@ -10221,34 +10328,34 @@ function PlayerProfileModal({
       alignItems: 'center',
       gap: '4px',
       padding: '4px 10px',
-      background: 'rgba(74,222,128,0.12)',
-      border: '1px solid rgba(74,222,128,0.25)',
+      background: 'rgba(79,229,138,0.12)',
+      border: '1px solid rgba(79,229,138,0.25)',
       borderRadius: '20px',
       fontSize: '11px',
       fontWeight: '700',
-      color: '#4ade80'
+      color: '#4FE58A'
     }
   }, /*#__PURE__*/React.createElement(I, {
     n: "Racket",
     s: 11,
-    c: "#4ade80"
+    c: "#4FE58A"
   }), " Player"), isCoach && /*#__PURE__*/React.createElement("span", {
     style: {
       display: 'inline-flex',
       alignItems: 'center',
       gap: '4px',
       padding: '4px 10px',
-      background: 'rgba(251,191,36,0.12)',
-      border: '1px solid rgba(251,191,36,0.25)',
+      background: 'rgba(255,198,92,0.12)',
+      border: '1px solid rgba(255,198,92,0.25)',
       borderRadius: '20px',
       fontSize: '11px',
       fontWeight: '700',
-      color: '#fbbf24'
+      color: '#FFC65C'
     }
   }, /*#__PURE__*/React.createElement(I, {
     n: "Crown",
     s: 11,
-    c: "#fbbf24"
+    c: "#FFC65C"
   }), " Coach"), player.skillLevel && /*#__PURE__*/React.createElement("span", {
     style: {
       padding: '4px 10px',
@@ -10282,11 +10389,11 @@ function PlayerProfileModal({
   }, [{
     label: 'Games',
     value: stats.gamesPlayed || 0,
-    color: '#4ade80'
+    color: '#4FE58A'
   }, {
     label: 'Wins',
     value: stats.totalWins || 0,
-    color: '#fbbf24'
+    color: '#FFC65C'
   }, {
     label: '🔥 Winners',
     value: stats.totalWinners || 0,
@@ -10320,8 +10427,8 @@ function PlayerProfileModal({
     style: {
       margin: '0 20px 20px',
       padding: '16px',
-      background: 'rgba(74,222,128,0.05)',
-      border: '1px solid rgba(74,222,128,0.15)',
+      background: 'rgba(79,229,138,0.05)',
+      border: '1px solid rgba(79,229,138,0.15)',
       borderRadius: 'var(--radius2)'
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -10457,7 +10564,7 @@ function PlayerProfileModal({
       borderRadius: 'var(--radius2)',
       background: 'var(--accent)',
       border: 'none',
-      color: '#050a14',
+      color: 'var(--accent-ink)',
       fontSize: '14px',
       fontWeight: '800',
       cursor: 'pointer'
@@ -10469,7 +10576,7 @@ function PlayerProfileModal({
       padding: '14px',
       borderRadius: 'var(--radius2)',
       background: 'transparent',
-      border: '1px solid rgba(74,222,128,0.3)',
+      border: '1px solid rgba(79,229,138,0.3)',
       color: 'var(--accent)',
       fontSize: '14px',
       fontWeight: '700',
@@ -10876,12 +10983,12 @@ function ProfileScreen({
   const roles = (userProfile === null || userProfile === void 0 ? void 0 : userProfile.roles) || ['player'];
   const isCoach = roles.includes('coach');
   const skillColors = {
-    beginner: '#4ade80',
+    beginner: '#4FE58A',
     intermediate: '#60a5fa',
-    advanced: '#fbbf24',
-    pro: '#f87171'
+    advanced: '#FFC65C',
+    pro: '#FF6B6B'
   };
-  const skillColor = skillColors[form.skillLevel] || '#4ade80';
+  const skillColor = skillColors[form.skillLevel] || '#4FE58A';
   const fmtDate = ts => {
     if (!ts) return '';
     const d = ts.toDate ? ts.toDate() : new Date(ts);
@@ -10957,7 +11064,7 @@ function ProfileScreen({
       width: '38px',
       height: '38px',
       borderRadius: '10px',
-      background: accent ? `${accent}18` : '#1a2538',
+      background: accent ? `${accent}18` : '#18222f',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -10966,11 +11073,11 @@ function ProfileScreen({
   }, /*#__PURE__*/React.createElement(I, {
     n: icon,
     s: 17,
-    c: accent || '#4a5878'
+    c: accent || '#56637C'
   })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: '11px',
-      color: '#4a5878',
+      color: '#56637C',
       fontWeight: '700',
       letterSpacing: '0.06em',
       textTransform: 'uppercase',
@@ -10980,7 +11087,7 @@ function ProfileScreen({
     style: {
       fontSize: '15px',
       fontWeight: '600',
-      color: '#f0f4ff'
+      color: '#EDF2FA'
     }
   }, value))) : null;
   return /*#__PURE__*/React.createElement("div", {
@@ -11006,11 +11113,11 @@ function ProfileScreen({
         display: 'flex',
         alignItems: 'center',
         gap: '6px',
-        background: 'rgba(248,113,113,0.08)',
-        border: '1px solid rgba(248,113,113,0.2)',
+        background: 'rgba(255,107,107,0.08)',
+        border: '1px solid rgba(255,107,107,0.2)',
         borderRadius: '10px',
         padding: '8px 14px',
-        color: '#f87171',
+        color: '#FF6B6B',
         fontSize: '13px',
         fontWeight: '600',
         cursor: 'pointer'
@@ -11018,7 +11125,7 @@ function ProfileScreen({
     }, /*#__PURE__*/React.createElement(I, {
       n: "LogOut",
       s: 14,
-      c: "#f87171"
+      c: "#FF6B6B"
     }), " Sign Out")
   }), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -11044,7 +11151,7 @@ function ProfileScreen({
       width: '28px',
       height: '28px',
       borderRadius: '50%',
-      background: '#fbbf24',
+      background: '#FFC65C',
       border: '3px solid var(--bg)',
       display: 'flex',
       alignItems: 'center',
@@ -11053,7 +11160,7 @@ function ProfileScreen({
   }, /*#__PURE__*/React.createElement(I, {
     n: "Crown",
     s: 14,
-    c: "#050a14"
+    c: "var(--accent-ink)"
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center'
@@ -11084,34 +11191,34 @@ function ProfileScreen({
       alignItems: 'center',
       gap: '5px',
       padding: '5px 12px',
-      background: 'rgba(74,222,128,0.12)',
-      border: '1px solid rgba(74,222,128,0.25)',
+      background: 'rgba(79,229,138,0.12)',
+      border: '1px solid rgba(79,229,138,0.25)',
       borderRadius: '20px',
       fontSize: '12px',
       fontWeight: '700',
-      color: '#4ade80'
+      color: '#4FE58A'
     }
   }, /*#__PURE__*/React.createElement(I, {
     n: "Racket",
     s: 13,
-    c: "#4ade80"
+    c: "#4FE58A"
   }), " Player"), isCoach && /*#__PURE__*/React.createElement("span", {
     style: {
       display: 'inline-flex',
       alignItems: 'center',
       gap: '5px',
       padding: '5px 12px',
-      background: 'rgba(251,191,36,0.12)',
-      border: '1px solid rgba(251,191,36,0.25)',
+      background: 'rgba(255,198,92,0.12)',
+      border: '1px solid rgba(255,198,92,0.25)',
       borderRadius: '20px',
       fontSize: '12px',
       fontWeight: '700',
-      color: '#fbbf24'
+      color: '#FFC65C'
     }
   }, /*#__PURE__*/React.createElement(I, {
     n: "Crown",
     s: 11,
-    c: "#fbbf24"
+    c: "#FFC65C"
   }), " Coach"), form.skillLevel && /*#__PURE__*/React.createElement("span", {
     style: {
       display: 'inline-flex',
@@ -11137,12 +11244,12 @@ function ProfileScreen({
     label: 'Games',
     value: stats.gamesPlayed || 0,
     icon: 'Activity',
-    color: '#4ade80'
+    color: '#4FE58A'
   }, {
     label: 'Wins',
     value: stats.totalWins || 0,
     icon: 'Trophy',
-    color: '#fbbf24'
+    color: '#FFC65C'
   }, {
     label: 'Friends',
     value: (userProfile === null || userProfile === void 0 || (_userProfile$friends4 = userProfile.friends) === null || _userProfile$friends4 === void 0 ? void 0 : _userProfile$friends4.length) || 0,
@@ -11190,7 +11297,7 @@ function ProfileScreen({
     icon: "MapPin",
     label: "Location",
     value: (userProfile === null || userProfile === void 0 ? void 0 : userProfile.location) || null,
-    accent: "#4ade80"
+    accent: "#4FE58A"
   }), /*#__PURE__*/React.createElement(InfoRow, {
     icon: "Racket",
     label: "Skill Level",
@@ -11355,7 +11462,7 @@ function ProfileScreen({
       borderRadius: 'var(--radius2)',
       background: 'var(--accent)',
       border: 'none',
-      color: '#050a14',
+      color: 'var(--accent-ink)',
       fontSize: '14px',
       fontWeight: '700',
       cursor: 'pointer'
@@ -11380,8 +11487,8 @@ function ProfileScreen({
       alignItems: 'center',
       gap: '14px',
       padding: '18px',
-      background: isCoach ? 'rgba(251,191,36,0.06)' : 'var(--surface)',
-      border: `1px solid ${isCoach ? 'rgba(251,191,36,0.3)' : 'rgba(255,255,255,0.07)'}`,
+      background: isCoach ? 'rgba(255,198,92,0.06)' : 'var(--surface)',
+      border: `1px solid ${isCoach ? 'rgba(255,198,92,0.3)' : 'rgba(255,255,255,0.07)'}`,
       borderRadius: isCoach ? 'var(--radius2) var(--radius2) 0 0' : 'var(--radius2)',
       cursor: 'pointer',
       transition: 'all 0.2s'
@@ -11391,7 +11498,7 @@ function ProfileScreen({
       width: '46px',
       height: '46px',
       borderRadius: '14px',
-      background: isCoach ? 'rgba(251,191,36,0.12)' : '#1a2538',
+      background: isCoach ? 'rgba(255,198,92,0.12)' : '#18222f',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -11401,7 +11508,7 @@ function ProfileScreen({
   }, /*#__PURE__*/React.createElement(I, {
     n: "Crown",
     s: 22,
-    c: isCoach ? '#fbbf24' : '#4a5878'
+    c: isCoach ? '#FFC65C' : '#56637C'
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1
@@ -11422,8 +11529,8 @@ function ProfileScreen({
       width: '44px',
       height: '26px',
       borderRadius: '13px',
-      background: isCoach ? '#fbbf24' : '#1a2538',
-      border: `1px solid ${isCoach ? '#fbbf24' : 'rgba(255,255,255,0.15)'}`,
+      background: isCoach ? '#FFC65C' : '#18222f',
+      border: `1px solid ${isCoach ? '#FFC65C' : 'rgba(255,255,255,0.15)'}`,
       position: 'relative',
       transition: 'all 0.2s',
       flexShrink: 0
@@ -11436,13 +11543,13 @@ function ProfileScreen({
       width: '18px',
       height: '18px',
       borderRadius: '50%',
-      background: isCoach ? '#050a14' : '#4a5878',
+      background: isCoach ? 'var(--accent-ink)' : '#56637C',
       transition: 'left 0.2s'
     }
   }))), isCoach && /*#__PURE__*/React.createElement("div", {
     style: {
-      background: 'rgba(251,191,36,0.04)',
-      border: '1px solid rgba(251,191,36,0.2)',
+      background: 'rgba(255,198,92,0.04)',
+      border: '1px solid rgba(255,198,92,0.2)',
       borderTop: 'none',
       borderRadius: '0 0 var(--radius2) var(--radius2)',
       padding: '16px 18px'
@@ -11455,7 +11562,7 @@ function ProfileScreen({
     style: {
       fontWeight: '700',
       fontSize: '14px',
-      color: '#fbbf24',
+      color: '#FFC65C',
       marginBottom: '2px'
     }
   }, userProfile.coachProfile.title), userProfile.coachProfile.rate && /*#__PURE__*/React.createElement("div", {
@@ -11482,9 +11589,9 @@ function ProfileScreen({
       width: '100%',
       padding: '11px',
       borderRadius: 'var(--radius2)',
-      background: 'rgba(251,191,36,0.1)',
-      border: '1px solid rgba(251,191,36,0.25)',
-      color: '#fbbf24',
+      background: 'rgba(255,198,92,0.1)',
+      border: '1px solid rgba(255,198,92,0.25)',
+      color: '#FFC65C',
       fontSize: '13px',
       fontWeight: '700',
       cursor: 'pointer',
@@ -11496,7 +11603,7 @@ function ProfileScreen({
   }, /*#__PURE__*/React.createElement(I, {
     n: "Edit",
     s: 14,
-    c: "#fbbf24"
+    c: "#FFC65C"
   }), " ", userProfile !== null && userProfile !== void 0 && (_userProfile$coachPro2 = userProfile.coachProfile) !== null && _userProfile$coachPro2 !== void 0 && _userProfile$coachPro2.title ? 'Edit Coach Profile' : 'Set Up Coach Profile')), !isCoach && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: '10px',
@@ -11542,7 +11649,7 @@ function ProfileScreen({
   }, [{
     label: 'Win Rate',
     value: analytics.winRate + '%',
-    color: '#4ade80'
+    color: '#4FE58A'
   }, {
     label: 'Avg Time',
     value: fmtClock(analytics.avgMs),
@@ -11550,7 +11657,7 @@ function ProfileScreen({
   }, {
     label: 'Streak',
     value: String(analytics.cur),
-    color: '#fbbf24'
+    color: '#FFC65C'
   }].map(t => /*#__PURE__*/React.createElement("div", {
     key: t.label,
     style: {
@@ -12478,7 +12585,7 @@ function LiveGameScreen({
     left: Math.random() * 100,
     delay: Math.random() * 2.5,
     dur: 2 + Math.random() * 2,
-    color: ['#4ade80', '#22c55e', '#fbbf24', '#f87171', '#60a5fa', '#a78bfa', '#fff'][i % 7],
+    color: ['#4FE58A', '#2fbf6b', '#FFC65C', '#FF6B6B', '#60a5fa', '#a78bfa', '#fff'][i % 7],
     size: 7 + Math.random() * 7
   })), []);
   const lb = getLeaderboard();
@@ -12579,8 +12686,8 @@ function LiveGameScreen({
           alignItems: 'center',
           gap: '14px',
           padding: '16px 18px',
-          background: isFirst ? 'rgba(74,222,128,0.08)' : 'var(--surface)',
-          border: `1px solid ${isFirst ? 'rgba(74,222,128,0.25)' : 'var(--border)'}`,
+          background: isFirst ? 'rgba(79,229,138,0.08)' : 'var(--surface)',
+          border: `1px solid ${isFirst ? 'rgba(79,229,138,0.25)' : 'var(--border)'}`,
           borderRadius: 'var(--radius2)',
           animation: `slideUp 0.25s ease-out ${i * 0.06}s both`
         }
@@ -12640,7 +12747,7 @@ function LiveGameScreen({
         borderRadius: 'var(--radius2)',
         background: 'var(--accent)',
         border: 'none',
-        color: '#050a14',
+        color: 'var(--accent-ink)',
         fontSize: '15px',
         fontWeight: '800',
         letterSpacing: '0.03em',
@@ -12717,7 +12824,7 @@ function LiveGameScreen({
       borderRadius: 'var(--radius2)',
       background: 'var(--accent)',
       border: 'none',
-      color: '#050a14',
+      color: 'var(--accent-ink)',
       fontSize: '15px',
       fontWeight: '800',
       cursor: 'pointer',
@@ -12735,7 +12842,7 @@ function LiveGameScreen({
       padding: '12px',
       borderRadius: 'var(--radius2)',
       background: 'transparent',
-      border: '1px solid rgba(248,113,113,0.3)',
+      border: '1px solid rgba(255,107,107,0.3)',
       color: 'var(--red)',
       fontSize: '14px',
       fontWeight: '700',
@@ -12764,7 +12871,7 @@ function LiveGameScreen({
       style: {
         fontSize: '88px',
         marginBottom: '12px',
-        filter: 'drop-shadow(0 0 32px rgba(251,191,36,0.7))'
+        filter: 'drop-shadow(0 0 32px rgba(255,198,92,0.7))'
       }
     }, "\uD83D\uDD25"), /*#__PURE__*/React.createElement("div", {
       style: {
@@ -12892,7 +12999,7 @@ function LiveGameScreen({
       borderRadius: 'var(--radius2)',
       background: 'var(--accent)',
       border: 'none',
-      color: '#050a14',
+      color: 'var(--accent-ink)',
       fontSize: '15px',
       fontWeight: '800',
       cursor: 'pointer',
@@ -12909,7 +13016,7 @@ function LiveGameScreen({
       padding: '14px',
       borderRadius: 'var(--radius2)',
       background: 'transparent',
-      border: '1px solid rgba(248,113,113,0.35)',
+      border: '1px solid rgba(255,107,107,0.35)',
       color: 'var(--red)',
       fontSize: '14px',
       fontWeight: '700',
@@ -12992,8 +13099,8 @@ function LiveGameScreen({
       justifyContent: 'center',
       gap: '10px',
       padding: '12px 16px',
-      background: 'rgba(74,222,128,0.07)',
-      border: '1px solid rgba(74,222,128,0.18)',
+      background: 'rgba(79,229,138,0.07)',
+      border: '1px solid rgba(79,229,138,0.18)',
       borderRadius: 'var(--radius2)',
       marginBottom: '16px',
       animation: 'kingPulse 2.5s ease-in-out infinite'
@@ -13052,8 +13159,8 @@ function LiveGameScreen({
       key: p.id,
       onClick: () => tapPlayer(p.id),
       style: {
-        background: isKing ? 'rgba(74,222,128,0.08)' : isSel ? 'rgba(74,222,128,0.12)' : 'var(--surface)',
-        border: `2px solid ${isKing ? 'rgba(74,222,128,0.4)' : isSel ? 'rgba(74,222,128,0.5)' : 'var(--border)'}`,
+        background: isKing ? 'rgba(79,229,138,0.08)' : isSel ? 'rgba(79,229,138,0.12)' : 'var(--surface)',
+        border: `2px solid ${isKing ? 'rgba(79,229,138,0.4)' : isSel ? 'rgba(79,229,138,0.5)' : 'var(--border)'}`,
         borderRadius: 'var(--radius2)',
         padding: '14px 12px',
         cursor: isKing ? 'default' : 'pointer',
@@ -13096,22 +13203,22 @@ function LiveGameScreen({
         padding: '7px',
         borderRadius: 'var(--radius3)',
         border: 'none',
-        background: 'linear-gradient(135deg,#f97316,#fbbf24)',
+        background: 'linear-gradient(135deg,#f97316,#FFC65C)',
         color: '#0a0a0a',
         fontSize: '11px',
         fontWeight: '800',
         letterSpacing: '0.06em',
         cursor: 'pointer',
         marginBottom: '10px',
-        boxShadow: '0 3px 12px rgba(251,191,36,0.35)'
+        boxShadow: '0 3px 12px rgba(255,198,92,0.35)'
       }
     }, "\uD83D\uDD25 WINNER"), isKing && anyWinnerThisRound && /*#__PURE__*/React.createElement("div", {
       style: {
         width: '100%',
         padding: '7px',
         borderRadius: 'var(--radius3)',
-        background: 'rgba(251,191,36,0.08)',
-        border: '1px solid rgba(251,191,36,0.2)',
+        background: 'rgba(255,198,92,0.08)',
+        border: '1px solid rgba(255,198,92,0.2)',
         color: 'var(--amber)',
         fontSize: '11px',
         fontWeight: '700',
@@ -13175,8 +13282,8 @@ function LiveGameScreen({
       width: '100%',
       padding: '14px',
       borderRadius: 'var(--radius2)',
-      background: 'rgba(251,191,36,0.12)',
-      border: '1px solid rgba(251,191,36,0.35)',
+      background: 'rgba(255,198,92,0.12)',
+      border: '1px solid rgba(255,198,92,0.35)',
       color: 'var(--amber)',
       fontSize: '14px',
       fontWeight: '700',
@@ -13193,7 +13300,7 @@ function LiveGameScreen({
       padding: '14px',
       borderRadius: 'var(--radius2)',
       background: 'transparent',
-      border: '1px solid rgba(248,113,113,0.3)',
+      border: '1px solid rgba(255,107,107,0.3)',
       color: 'var(--red)',
       fontSize: '14px',
       fontWeight: '700',
@@ -13522,7 +13629,7 @@ function LiveGameScreen({
       borderRadius: 'var(--radius2)',
       background: 'var(--accent)',
       border: 'none',
-      color: '#050a14',
+      color: 'var(--accent-ink)',
       fontSize: '15px',
       fontWeight: '800',
       cursor: 'pointer',
@@ -13625,7 +13732,7 @@ function ShareModal({
       borderRadius: 'var(--radius2)',
       background: copied ? 'var(--accent3)' : 'var(--accent)',
       border: copied ? '1px solid var(--accent)' : 'none',
-      color: copied ? 'var(--accent)' : '#050a14',
+      color: copied ? 'var(--accent)' : 'var(--accent-ink)',
       fontWeight: '700',
       fontSize: '14px',
       cursor: 'pointer',
@@ -13638,7 +13745,7 @@ function ShareModal({
   }, /*#__PURE__*/React.createElement(I, {
     n: copied ? 'Check' : 'Share',
     s: 16,
-    c: copied ? 'var(--accent)' : '#050a14'
+    c: copied ? 'var(--accent)' : 'var(--accent-ink)'
   }), copied ? 'Copied to clipboard!' : 'Copy Link')));
 }
 
