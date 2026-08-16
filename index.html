@@ -3746,11 +3746,16 @@ function CreateEventScreen({
         isHost: true,
         photoURL: (userProfile === null || userProfile === void 0 ? void 0 : userProfile.photoURL) || ''
       };
+      // Manual players have no account and can never tap "Join", so the host
+      // adding them by name IS the confirmation — they count as going.
+      // Real app users stay 'invited' until they RSVP themselves.
       const inviteRsvps = form.invitedPlayers.map(u => ({
         oderId: u.id,
         userName: `${u.firstName || ''} ${u.lastName || ''}`.trim(),
         firstName: u.firstName || '',
-        status: 'invited',
+        status: u.manual ? 'going' : 'invited',
+        isManual: !!u.manual,
+        email: u.email || '',
         photoURL: u.photoURL || ''
       }));
       const docRef = await db.collection('events').add({
@@ -4317,7 +4322,7 @@ function CreateEventScreen({
       setForm(f => ({
         ...f,
         coach: {
-          id: 'manual_' + Date.now(),
+          id: 'manual_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
           firstName,
           lastName: rest.join(' ') || '',
           manual: true
@@ -4572,7 +4577,7 @@ function CreateEventScreen({
     onClick: () => {
       if (!manualPlayerName.trim()) return;
       const [firstName, ...rest] = manualPlayerName.trim().split(' ');
-      const id = 'manual_' + Date.now();
+      const id = 'manual_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
       const newPlayer = {
         id,
         firstName,
@@ -5367,6 +5372,10 @@ function EventDetailScreen({
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [editEventForm, setEditEventForm] = useState(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  // Player ids present when the edit sheet was opened. Anything here that is
+  // gone from the form on save was deliberately removed by the host; anything
+  // that appeared on the doc since is left alone.
+  const editBaselineIds = React.useRef([]);
   const [showEditDatePicker, setShowEditDatePicker] = useState(false);
   const [showEditTimePicker, setShowEditTimePicker] = useState(false);
   // duplicate-event state
@@ -5466,61 +5475,145 @@ function EventDetailScreen({
       }).catch(() => {});
     }
   }, [event === null || event === void 0 || (_event$locationCoords3 = event.locationCoords) === null || _event$locationCoords3 === void 0 ? void 0 : _event$locationCoords3.lat, event === null || event === void 0 || (_event$locationCoords4 = event.locationCoords) === null || _event$locationCoords4 === void 0 ? void 0 : _event$locationCoords4.lng, event === null || event === void 0 ? void 0 : event.location, event === null || event === void 0 ? void 0 : event.dateTime]);
+  // Every rsvps/waitlist write goes through a transaction. These are whole-array
+  // rewrites, so a plain update() built from the locally-cached event silently
+  // discards any RSVP that landed between our read and our write — two players
+  // tapping Join at the same time used to leave only one of them on the game.
+  const [rsvpError, setRsvpError] = useState('');
   const handleRSVP = async action => {
     if (!currentUser || !event) return;
-    const rsvps = event.rsvps || [];
-    const waitlist = event.waitlist || [];
     const myInfo = {
       oderId: currentUser.uid,
       userName: `${(userProfile === null || userProfile === void 0 ? void 0 : userProfile.firstName) || ''} ${(userProfile === null || userProfile === void 0 ? void 0 : userProfile.lastName) || ''}`.trim(),
       firstName: (userProfile === null || userProfile === void 0 ? void 0 : userProfile.firstName) || '',
       photoURL: (userProfile === null || userProfile === void 0 ? void 0 : userProfile.photoURL) || ''
     };
-    if (action === 'join') {
-      const exists = rsvps.findIndex(r => r.oderId === currentUser.uid);
-      const newRsvps = exists >= 0 ? rsvps.map((r, i) => i === exists ? {
-        ...r,
-        status: 'going'
-      } : r) : [...rsvps, {
-        ...myInfo,
-        status: 'going',
-        isHost: false
-      }];
-      await db.collection('events').doc(eventId).update({
-        rsvps: newRsvps,
-        waitlist: waitlist.filter(r => r.oderId !== currentUser.uid)
+    const ref = db.collection('events').doc(eventId);
+    setRsvpError('');
+    try {
+      await db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) throw new Error('This game no longer exists.');
+        const data = snap.data();
+        const rsvps = data.rsvps || [];
+        const waitlist = data.waitlist || [];
+        if (action === 'join') {
+          if (data.cancelled) throw new Error('This game has been cancelled.');
+          const exists = rsvps.findIndex(r => r.oderId === currentUser.uid);
+          // Re-check capacity against the live doc, not the cached render.
+          const goingCount = rsvps.filter(r => r.status === 'going').length;
+          const alreadyGoing = exists >= 0 && rsvps[exists].status === 'going';
+          if (!alreadyGoing && data.maxPlayers && goingCount >= data.maxPlayers) {
+            throw new Error('This game just filled up.');
+          }
+          const newRsvps = exists >= 0 ? rsvps.map((r, i) => i === exists ? {
+            ...r,
+            status: 'going'
+          } : r) : [...rsvps, {
+            ...myInfo,
+            status: 'going',
+            isHost: false
+          }];
+          tx.update(ref, {
+            rsvps: newRsvps,
+            waitlist: waitlist.filter(r => r.oderId !== currentUser.uid)
+          });
+        } else if (action === 'waitlist') {
+          if (waitlist.some(r => r.oderId === currentUser.uid)) return;
+          tx.update(ref, {
+            waitlist: [...waitlist, {
+              ...myInfo,
+              requestedAt: new Date().toISOString()
+            }]
+          });
+        } else if (action === 'leave') {
+          tx.update(ref, {
+            rsvps: rsvps.filter(r => r.oderId !== currentUser.uid),
+            waitlist: waitlist.filter(r => r.oderId !== currentUser.uid)
+          });
+        }
       });
-    } else if (action === 'waitlist') {
-      if (waitlist.some(r => r.oderId === currentUser.uid)) return;
-      await db.collection('events').doc(eventId).update({
-        waitlist: [...waitlist, {
-          ...myInfo,
-          requestedAt: new Date().toISOString()
-        }]
-      });
-    } else if (action === 'leave') {
-      await db.collection('events').doc(eventId).update({
-        rsvps: rsvps.filter(r => r.oderId !== currentUser.uid),
-        waitlist: waitlist.filter(r => r.oderId !== currentUser.uid)
-      });
+    } catch (e) {
+      console.error('RSVP error:', e);
+      setRsvpError(e && e.message ? e.message : "Couldn't save your RSVP. Try again.");
     }
   };
   const approveWaitlist = async uid => {
-    const person = (event.waitlist || []).find(r => r.oderId === uid);
-    if (!person) return;
-    await db.collection('events').doc(eventId).update({
-      waitlist: (event.waitlist || []).filter(r => r.oderId !== uid),
-      rsvps: [...(event.rsvps || []), {
-        ...person,
-        status: 'going',
-        isHost: false
-      }]
-    });
+    const ref = db.collection('events').doc(eventId);
+    try {
+      await db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return;
+        const data = snap.data();
+        const waitlist = data.waitlist || [];
+        const rsvps = data.rsvps || [];
+        const person = waitlist.find(r => r.oderId === uid);
+        if (!person) return;
+        const goingCount = rsvps.filter(r => r.status === 'going').length;
+        if (data.maxPlayers && goingCount >= data.maxPlayers) {
+          throw new Error('Game is full — raise the player limit first.');
+        }
+        tx.update(ref, {
+          waitlist: waitlist.filter(r => r.oderId !== uid),
+          rsvps: rsvps.some(r => r.oderId === uid) ? rsvps.map(r => r.oderId === uid ? {
+            ...r,
+            status: 'going'
+          } : r) : [...rsvps, {
+            ...person,
+            status: 'going',
+            isHost: false
+          }]
+        });
+      });
+    } catch (e) {
+      console.error('Approve waitlist error:', e);
+      setRsvpError(e && e.message ? e.message : "Couldn't approve that player.");
+    }
   };
   const denyWaitlist = async uid => {
-    await db.collection('events').doc(eventId).update({
-      waitlist: (event.waitlist || []).filter(r => r.oderId !== uid)
-    });
+    const ref = db.collection('events').doc(eventId);
+    try {
+      await db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return;
+        tx.update(ref, {
+          waitlist: (snap.data().waitlist || []).filter(r => r.oderId !== uid)
+        });
+      });
+    } catch (e) {
+      console.error('Deny waitlist error:', e);
+    }
+  };
+  // Host-side controls for players who haven't RSVPed themselves.
+  const setInvitedStatus = async (uid, status) => {
+    const ref = db.collection('events').doc(eventId);
+    try {
+      await db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return;
+        const data = snap.data();
+        const rsvps = data.rsvps || [];
+        if (status === 'remove') {
+          tx.update(ref, {
+            rsvps: rsvps.filter(r => r.oderId !== uid)
+          });
+          return;
+        }
+        const goingCount = rsvps.filter(r => r.status === 'going').length;
+        if (status === 'going' && data.maxPlayers && goingCount >= data.maxPlayers) {
+          throw new Error('Game is full — raise the player limit first.');
+        }
+        tx.update(ref, {
+          rsvps: rsvps.map(r => r.oderId === uid ? {
+            ...r,
+            status
+          } : r)
+        });
+      });
+    } catch (e) {
+      console.error('Update invited player error:', e);
+      setRsvpError(e && e.message ? e.message : "Couldn't update that player.");
+    }
   };
 
   // Add to Calendar (builds .ics download)
@@ -5600,14 +5693,20 @@ function EventDetailScreen({
     // Reconstruct invitedPlayers from rsvps (non-host invited/going players)
     const invitedPlayers = (event.rsvps || []).filter(r => !r.isHost && r.oderId !== (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid)).map(r => {
       var _r$oderId;
+      // userName holds the full name; firstName alone would drop the surname
+      // every time the host saves an edit.
+      const full = (r.userName || r.firstName || '').trim();
+      const parts = full.split(' ');
       return {
         id: r.oderId,
-        firstName: r.firstName || r.userName || '',
-        lastName: '',
+        firstName: r.firstName || parts[0] || '',
+        lastName: parts.slice(1).join(' '),
+        email: r.email || '',
         photoURL: r.photoURL || '',
-        manual: (_r$oderId = r.oderId) === null || _r$oderId === void 0 ? void 0 : _r$oderId.startsWith('manual_')
+        manual: r.isManual !== undefined ? !!r.isManual : !!((_r$oderId = r.oderId) !== null && _r$oderId !== void 0 && _r$oderId.startsWith('manual_'))
       };
     });
+    editBaselineIds.current = invitedPlayers.map(u => u.id);
     setEditEventForm({
       title: event.title || '',
       location: event.location || '',
@@ -5646,29 +5745,57 @@ function EventDetailScreen({
       if (editEventForm.ampm === 'PM' && h !== 12) h += 12;
       if (editEventForm.ampm === 'AM' && h === 12) h = 0;
       dt.setHours(h, parseInt(editEventForm.minute), 0, 0);
-      // Merge invitedPlayers into rsvps (keep existing host/going rsvps, add/update invited)
-      const existingRsvps = event.rsvps || [];
-      const hostRsvps = existingRsvps.filter(r => r.isHost || r.status === 'going');
-      const newInviteRsvps = editEventForm.invitedPlayers.filter(u => !hostRsvps.some(r => r.oderId === u.id)).map(u => ({
-        oderId: u.id,
-        userName: `${u.firstName || ''} ${u.lastName || ''}`.trim(),
-        firstName: u.firstName || '',
-        status: 'invited',
-        photoURL: u.photoURL || ''
-      }));
-      await db.collection('events').doc(eventId).update({
-        title: editEventForm.title.trim(),
-        location: editEventForm.location.trim(),
-        locationCoords: editEventForm.locationCoords || null,
-        notes: editEventForm.notes.trim(),
-        maxPlayers: editEventForm.hasMaxPlayers ? editEventForm.maxPlayers : null,
-        isPrivate: editEventForm.isPrivate,
-        allowWaitlist: editEventForm.allowWaitlist,
-        coachId: ((_editEventForm$coach = editEventForm.coach) === null || _editEventForm$coach === void 0 ? void 0 : _editEventForm$coach.id) || null,
-        coachName: editEventForm.coach ? `${editEventForm.coach.firstName} ${editEventForm.coach.lastName}`.trim() : '',
-        rsvps: [...hostRsvps, ...newInviteRsvps],
-        dateTime: firebase.firestore.Timestamp.fromDate(dt),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      // Only the players the host explicitly removed in this edit are dropped.
+      // Everything else is merged against the *live* doc inside the transaction
+      // below, so an RSVP that lands while the edit sheet is open is never lost.
+      const formIds = editEventForm.invitedPlayers.map(u => u.id);
+      const openedWithIds = editBaselineIds.current || [];
+      const removedIds = openedWithIds.filter(id => !formIds.includes(id));
+      const formById = new Map(editEventForm.invitedPlayers.map(u => [u.id, u]));
+      const ref = db.collection('events').doc(eventId);
+      await db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) throw new Error('Event no longer exists');
+        const liveRsvps = snap.data().rsvps || [];
+        // Keep every live RSVP except the ones the host removed in this edit.
+        const kept = liveRsvps.filter(r => !removedIds.includes(r.oderId));
+        // Add invitees that aren't on the doc yet (manual ones count as going).
+        const additions = editEventForm.invitedPlayers.filter(u => !kept.some(r => r.oderId === u.id)).map(u => ({
+          oderId: u.id,
+          userName: `${u.firstName || ''} ${u.lastName || ''}`.trim(),
+          firstName: u.firstName || '',
+          status: u.manual ? 'going' : 'invited',
+          isManual: !!u.manual,
+          email: u.email || '',
+          photoURL: u.photoURL || ''
+        }));
+        // Refresh names on kept manual entries the host renamed in the sheet.
+        const merged = kept.map(r => {
+          const u = formById.get(r.oderId);
+          const isManualEntry = r.isManual !== undefined ? !!r.isManual : !!(r.oderId && r.oderId.startsWith('manual_'));
+          if (!u || !isManualEntry) return r;
+          return {
+            ...r,
+            userName: `${u.firstName || ''} ${u.lastName || ''}`.trim() || r.userName,
+            firstName: u.firstName || r.firstName,
+            email: u.email || r.email || ''
+          };
+        });
+        tx.update(ref, {
+          title: editEventForm.title.trim(),
+          location: editEventForm.location.trim(),
+          locationCoords: editEventForm.locationCoords || null,
+          notes: editEventForm.notes.trim(),
+          maxPlayers: editEventForm.hasMaxPlayers ? editEventForm.maxPlayers : null,
+          isPrivate: editEventForm.isPrivate,
+          allowWaitlist: editEventForm.allowWaitlist,
+          coachId: ((_editEventForm$coach = editEventForm.coach) === null || _editEventForm$coach === void 0 ? void 0 : _editEventForm$coach.id) || null,
+          coachName: editEventForm.coach ? `${editEventForm.coach.firstName} ${editEventForm.coach.lastName}`.trim() : '',
+          rsvps: [...merged, ...additions],
+          waitlist: (snap.data().waitlist || []).filter(w => !removedIds.includes(w.oderId)),
+          dateTime: firebase.firestore.Timestamp.fromDate(dt),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
       });
       setShowEditEvent(false);
     } catch (e) {
@@ -5882,6 +6009,7 @@ function EventDetailScreen({
     variant: "secondary"
   }, "Go Back"));
   const going = (event.rsvps || []).filter(r => r.status === 'going');
+  const invited = (event.rsvps || []).filter(r => r.status === 'invited');
   const waitlist = event.waitlist || [];
   const isGoing = going.some(r => r.oderId === (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid));
   const isOnWaitlist = waitlist.some(r => r.oderId === (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid));
@@ -6355,7 +6483,7 @@ function EventDetailScreen({
     var _p$userName;
     const isMe = p.oderId === (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid);
     return /*#__PURE__*/React.createElement("div", {
-      key: i,
+      key: p.oderId || i,
       style: {
         display: 'flex',
         flexDirection: 'column',
@@ -6404,6 +6532,93 @@ function EventDetailScreen({
         whiteSpace: 'nowrap'
       }
     }, p.firstName || ((_p$userName = p.userName) === null || _p$userName === void 0 ? void 0 : _p$userName.split(' ')[0])));
+  }))), rsvpError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '16px',
+      padding: '10px 14px',
+      borderRadius: 'var(--radius2)',
+      background: 'rgba(248,113,113,0.08)',
+      border: '1px solid rgba(248,113,113,0.3)',
+      color: 'var(--red)',
+      fontSize: '13px',
+      fontWeight: '600'
+    }
+  }, rsvpError), invited.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '20px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '12px',
+      fontWeight: '700',
+      color: 'var(--text3)',
+      letterSpacing: '0.07em',
+      textTransform: 'uppercase',
+      marginBottom: '12px'
+    }
+  }, "Invited \xB7 ", invited.length, isHost ? ' · tap to confirm' : ''), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: '12px',
+      overflowX: 'auto',
+      paddingBottom: '4px'
+    }
+  }, invited.map((p, i) => {
+    var _p$userName3;
+    return /*#__PURE__*/React.createElement("div", {
+      key: p.oderId || i,
+      onClick: () => isHost && setInvitedStatus(p.oderId, 'going'),
+      title: isHost ? 'Mark as playing' : '',
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '5px',
+        flexShrink: 0,
+        cursor: isHost ? 'pointer' : 'default'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'relative'
+      }
+    }, /*#__PURE__*/React.createElement(Avatar, {
+      src: p.photoURL,
+      name: p.firstName || p.userName,
+      size: 44,
+      style: {
+        border: '2px dashed var(--border2)',
+        opacity: 0.65
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'absolute',
+        bottom: '-2px',
+        right: '-2px',
+        width: '16px',
+        height: '16px',
+        borderRadius: '50%',
+        background: 'var(--surface2)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: '2px solid var(--bg)'
+      }
+    }, /*#__PURE__*/React.createElement(I, {
+      n: "Clock",
+      s: 8,
+      c: "var(--text3)"
+    }))), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: '10px',
+        color: 'var(--text3)',
+        fontWeight: '600',
+        maxWidth: '44px',
+        textAlign: 'center',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, p.firstName || ((_p$userName3 = p.userName) === null || _p$userName3 === void 0 ? void 0 : _p$userName3.split(' ')[0])));
   }))), waitlist.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: '20px'
@@ -7502,7 +7717,7 @@ function EventDetailScreen({
         setEf(f => ({
           ...f,
           coach: {
-            id: 'manual_' + Date.now(),
+            id: 'manual_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
             firstName,
             lastName: rest.join(' ') || '',
             manual: true
@@ -7742,7 +7957,7 @@ function EventDetailScreen({
         if (!editManualPlayerName.trim()) return;
         const [firstName, ...rest] = editManualPlayerName.trim().split(' ');
         const newP = {
-          id: 'manual_' + Date.now(),
+          id: 'manual_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
           firstName,
           lastName: rest.join(' ') || '',
           manual: true
@@ -11912,7 +12127,7 @@ function LiveGameScreen({
       name: p.firstName || p.name,
       photoURL: p.photoURL
     }));
-  }, []);
+  }, [event, players]);
 
   // ── restore from localStorage if session exists ────────────
   const getSavedSession = () => {
