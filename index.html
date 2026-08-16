@@ -12473,6 +12473,248 @@ function PlayersScreen() {
 }
 
 // ==================== PROFILE SCREEN ====================
+// ==================== GAME SCORECARD MODAL ====================
+// Opens the stored leaderboard for one finished game. Reads gameResults
+// directly rather than the event, so instant games (which have no event
+// document) are just as viewable as scheduled ones.
+function GameScorecardModal({
+  resultId,
+  onClose,
+  onViewEvent
+}) {
+  const {
+    currentUser
+  } = useAuth();
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!resultId) return;
+    let alive = true;
+    db.collection('gameResults').doc(resultId).get().then(d => {
+      if (!alive) return;
+      setResult(d.exists ? {
+        id: d.id,
+        ...d.data()
+      } : null);
+      setLoading(false);
+    }).catch(() => {
+      if (alive) setLoading(false);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [resultId]);
+  const fmtClock = ms => {
+    const t = Math.floor((ms || 0) / 1000);
+    return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+  };
+  const standings = (result && result.standings || []).slice().sort((a, b) => (b.timeMs || 0) - (a.timeMs || 0));
+  const top = standings[0];
+  const when = result && result.completedAt && result.completedAt.toDate ? result.completedAt.toDate() : null;
+  return /*#__PURE__*/React.createElement("div", {
+    onClick: onClose,
+    style: {
+      // above the tab bar (1000), so the sheet's actions aren't covered
+      position: 'fixed',
+      inset: 0,
+      zIndex: 1100,
+      background: 'rgba(6,10,16,.72)',
+      backdropFilter: 'blur(6px)',
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.stopPropagation(),
+    style: {
+      width: '100%',
+      maxWidth: '500px',
+      maxHeight: '88vh',
+      overflowY: 'auto',
+      background: 'var(--bg3)',
+      borderTop: '1px solid rgba(255,255,255,.1)',
+      borderRadius: '24px 24px 0 0',
+      padding: '14px 18px calc(30px + env(safe-area-inset-bottom, 0px))',
+      animation: 'tvin .22s ease-out'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '38px',
+      height: '4px',
+      borderRadius: '99px',
+      background: 'var(--surface2)',
+      margin: '0 auto 16px'
+    }
+  }), loading ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: '30px',
+      color: 'var(--text3)'
+    }
+  }, "Loading scorecard…") : !result ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: '30px',
+      color: 'var(--text3)'
+    }
+  }, "That scorecard is no longer available.") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      marginBottom: '18px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "eyebrow-mono",
+    style: {
+      marginBottom: '8px'
+    }
+  }, "Final scorecard"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "800 24px/1 'DM Sans', sans-serif",
+      letterSpacing: '-0.03em',
+      color: 'var(--text)',
+      marginBottom: '6px'
+    }
+  }, when ? when.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric'
+  }) : 'Game'), /*#__PURE__*/React.createElement("div", {
+    className: "mono",
+    style: {
+      font: "400 12px var(--mono)",
+      color: 'var(--text3)'
+    }
+  }, fmtClock(result.durationMs), " on court · ", standings.length, " player", standings.length === 1 ? '' : 's')),
+  // king of the court
+  top && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      background: 'linear-gradient(160deg, var(--gold-tint), rgba(255,198,92,.04))',
+      border: '1px solid var(--gold-edge)',
+      borderRadius: '20px',
+      padding: '18px',
+      marginBottom: '18px'
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "Crown",
+    s: 20,
+    c: "var(--gold)"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "eyebrow-mono",
+    style: {
+      color: 'var(--gold-ink)',
+      margin: '6px 0 10px'
+    }
+  }, "King of the court"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "800 21px/1 'DM Sans', sans-serif",
+      letterSpacing: '-0.03em',
+      color: 'var(--text)',
+      marginBottom: '6px'
+    }
+  }, top.name || 'Player'), /*#__PURE__*/React.createElement("div", {
+    className: "mono",
+    style: {
+      font: "400 13px var(--mono)",
+      color: 'var(--gold-ink)'
+    }
+  }, fmtClock(top.timeMs), " held · ", top.wins || 0, " win", (top.wins || 0) === 1 ? '' : 's')),
+  // full ranking with proportional bars
+  standings.map((p, i) => {
+    const pct = top && top.timeMs > 0 ? Math.max(3, Math.round((p.timeMs || 0) / top.timeMs * 100)) : 3;
+    const isMe = p.playerId === (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid);
+    return /*#__PURE__*/React.createElement("div", {
+      key: p.playerId || i,
+      style: {
+        marginBottom: '13px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '9px',
+        marginBottom: '5px'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "mono",
+      style: {
+        font: "400 12px var(--mono)",
+        color: 'var(--text3)',
+        width: '18px',
+        flex: 'none'
+      }
+    }, i + 1), /*#__PURE__*/React.createElement("span", {
+      style: {
+        flex: 1,
+        minWidth: 0,
+        font: "600 15px 'DM Sans', sans-serif",
+        color: isMe ? 'var(--accent)' : 'var(--text)',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, p.name || 'Player'), i === 0 && /*#__PURE__*/React.createElement(I, {
+      n: "Crown",
+      s: 13,
+      c: "var(--gold)"
+    }), /*#__PURE__*/React.createElement("span", {
+      className: "mono",
+      style: {
+        font: "400 13px var(--mono)",
+        color: 'var(--text2)',
+        flex: 'none'
+      }
+    }, fmtClock(p.timeMs), " · ", p.wins || 0, "W", p.winners ? ` · ${p.winners}🔥` : '')), /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: '4px',
+        borderRadius: '99px',
+        background: 'var(--surface2)',
+        overflow: 'hidden'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: pct + '%',
+        height: '100%',
+        borderRadius: '99px',
+        background: i === 0 ? 'var(--gold)' : i < 3 ? 'var(--accent)' : 'rgba(79,229,138,.35)'
+      }
+    })));
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: '10px',
+      marginTop: '20px'
+    }
+  }, result.eventId && onViewEvent && /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      onClose();
+      onViewEvent(result.eventId);
+    },
+    style: {
+      flex: 1,
+      height: '52px',
+      borderRadius: '14px',
+      background: 'var(--surface2)',
+      border: '1px solid rgba(255,255,255,.1)',
+      color: 'var(--text)',
+      font: "700 15px 'DM Sans', sans-serif",
+      cursor: 'pointer'
+    }
+  }, "Open game"), /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    style: {
+      flex: 1,
+      height: '52px',
+      borderRadius: '14px',
+      border: 'none',
+      background: 'var(--accent)',
+      color: 'var(--accent-ink)',
+      font: "700 15px 'DM Sans', sans-serif",
+      cursor: 'pointer'
+    }
+  }, "Done")))));
+}
+
 function ProfileScreen({
   onLogout,
   setScreen,
@@ -12497,6 +12739,8 @@ function ProfileScreen({
   const [gameHistory, setGameHistory] = useState([]);
   const [showCoachEditor, setShowCoachEditor] = useState(false);
   const [matchScores, setMatchScores] = useState([]);
+  const [scorecardId, setScorecardId] = useState(null); // open gameResults doc
+  const [historyLimit, setHistoryLimit] = useState(5);
   const [loadingScores, setLoadingScores] = useState(true);
   useEffect(() => {
     if (userProfile) setForm({
@@ -12509,7 +12753,7 @@ function ProfileScreen({
   }, [userProfile]);
   useEffect(() => {
     if (!currentUser) return;
-    db.collection('events').orderBy('dateTime', 'desc').limit(50).get().then(s => {
+    db.collection('events').orderBy('dateTime', 'desc').limit(200).get().then(s => {
       const myGames = s.docs.map(d => ({
         id: d.id,
         ...d.data()
@@ -13375,7 +13619,9 @@ function ProfileScreen({
     }
   }, "Recent results"), matchScores.slice(0, 6).map(s => /*#__PURE__*/React.createElement("div", {
     key: s.id,
+    onClick: () => s.gameResultId && setScorecardId(s.gameResultId),
     style: {
+      cursor: s.gameResultId ? 'pointer' : 'default',
       display: 'flex',
       alignItems: 'center',
       gap: '12px',
@@ -13429,7 +13675,7 @@ function ProfileScreen({
     icon: "Calendar",
     title: "No games yet",
     sub: "Games you join or host will appear here"
-  }) : gameHistory.map(g => {
+  }) : gameHistory.slice(0, historyLimit).map(g => {
     var _g$dateTime;
     const d = (_g$dateTime = g.dateTime) !== null && _g$dateTime !== void 0 && _g$dateTime.toDate ? g.dateTime.toDate() : new Date(g.dateTime || Date.now());
     return /*#__PURE__*/React.createElement(Card, {
@@ -13503,7 +13749,36 @@ function ProfileScreen({
       s: 12,
       c: "var(--text3)"
     }), g.location.split(',')[0])));
-  }))), showCoachEditor && /*#__PURE__*/React.createElement(CoachProfileEditor, {
+  }), gameHistory.length > historyLimit && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setHistoryLimit(n => n + 20),
+    style: {
+      width: '100%',
+      height: '48px',
+      marginTop: '4px',
+      borderRadius: '13px',
+      background: 'transparent',
+      border: '1px solid var(--border2)',
+      color: 'var(--accent)',
+      font: "600 14px 'DM Sans', sans-serif",
+      cursor: 'pointer'
+    }
+  }, `View more · ${gameHistory.length - historyLimit} older game${gameHistory.length - historyLimit === 1 ? '' : 's'}`), historyLimit > 5 && gameHistory.length <= historyLimit && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setHistoryLimit(5),
+    style: {
+      width: '100%',
+      height: '44px',
+      marginTop: '4px',
+      background: 'transparent',
+      border: 'none',
+      color: 'var(--text3)',
+      font: "600 13px 'DM Sans', sans-serif",
+      cursor: 'pointer'
+    }
+  }, 'Show less'))), scorecardId && /*#__PURE__*/React.createElement(GameScorecardModal, {
+    resultId: scorecardId,
+    onClose: () => setScorecardId(null),
+    onViewEvent: onViewEvent
+  }), showCoachEditor && /*#__PURE__*/React.createElement(CoachProfileEditor, {
     onClose: () => setShowCoachEditor(false)
   }));
 }
