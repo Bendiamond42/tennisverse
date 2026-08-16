@@ -3310,6 +3310,7 @@ function InstantGameModal({
   const [loading, setLoading] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
   const [manualName, setManualName] = useState('');
+  const [fmt, setFormat] = useState('kings');
   const [showManual, setShowManual] = useState(false);
   useEffect(() => {
     db.collection('users').limit(1000).get().then(s => {
@@ -3353,219 +3354,310 @@ function InstantGameModal({
     const allPlayers = [me, ...others];
     onClose(allPlayers);
   };
-  return /*#__PURE__*/React.createElement(Modal, {
-    onClose: () => onClose(),
-    title: "Instant Game"
-  }, /*#__PURE__*/React.createElement("div", {
+  // ── Game setup: full-screen "Who's playing?" per the handoff ──
+  const total = selected.length + 1; // host always plays
+  const canStart = total >= 4;
+  return /*#__PURE__*/React.createElement("div", {
     style: {
-      marginBottom: '16px'
+      position: 'fixed',
+      inset: 0,
+      zIndex: 300,
+      background: 'var(--bg)',
+      overflowY: 'auto',
+      paddingBottom: '110px'
     }
   }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: '500px',
+      margin: '0 auto',
+      padding: '20px 20px 0'
+    }
+  },
+  // header: back chip · NEW GAME · Who's playing?
+  /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: '10px'
+      gap: '14px',
+      marginBottom: '24px'
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => onClose(),
     style: {
-      fontSize: '12px',
+      width: '40px',
+      height: '40px',
+      flex: 'none',
+      borderRadius: '13px',
+      background: 'var(--surface)',
+      border: '1px solid rgba(255,255,255,.09)',
       color: 'var(--text2)',
-      fontWeight: '600',
-      letterSpacing: '0.05em',
-      textTransform: 'uppercase'
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
     }
-  }, "Select Players (optional)"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setShowManual(!showManual),
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "ArrowLeft",
+    s: 15,
+    c: "currentColor"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "eyebrow-mono",
     style: {
-      background: 'var(--surface2)',
-      border: '1px solid var(--border2)',
-      borderRadius: 'var(--radius3)',
-      padding: '5px 10px',
-      color: 'var(--text2)',
-      fontSize: '12px',
-      fontWeight: '600',
-      cursor: 'pointer'
+      marginBottom: '6px'
     }
-  }, "+ Add by name")), showManual && /*#__PURE__*/React.createElement("div", {
+  }, "New game"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "800 22px/1 'DM Sans', sans-serif",
+      letterSpacing: '-0.03em',
+      color: 'var(--text)'
+    }
+  }, "Who's playing?"))),
+  // format segmented: active half is #1d2b3d per the prototype
+  /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: '8px',
-      marginBottom: '12px',
-      padding: '12px',
+      padding: '5px',
       background: 'var(--surface)',
-      borderRadius: 'var(--radius2)',
-      border: '1px solid var(--border2)'
+      border: '1px solid var(--border)',
+      borderRadius: '14px',
+      marginBottom: '20px'
     }
-  }, /*#__PURE__*/React.createElement("input", {
-    value: manualName,
-    onChange: e => setManualName(e.target.value),
-    onKeyDown: e => e.key === 'Enter' && addManualPlayer(),
-    placeholder: "Type player name...",
-    autoFocus: true,
+  }, [['kings', "King's Court"], ['rotating', 'Rotating']].map(([f, label]) => /*#__PURE__*/React.createElement("button", {
+    key: f,
+    onClick: () => setFormat(f),
     style: {
       flex: 1,
-      padding: '10px 14px',
-      background: 'var(--bg)',
-      border: '1px solid var(--border2)',
-      borderRadius: 'var(--radius3)',
-      color: 'var(--text)',
-      fontSize: '14px',
-      outline: 'none'
+      height: '42px',
+      borderRadius: '10px',
+      border: 'none',
+      cursor: 'pointer',
+      background: fmt === f ? '#1d2b3d' : 'transparent',
+      color: fmt === f ? 'var(--text)' : 'var(--text3)',
+      font: "600 13px 'DM Sans', sans-serif",
+      transition: 'all .15s'
     }
-  }), /*#__PURE__*/React.createElement(Btn, {
-    onClick: addManualPlayer,
-    disabled: !manualName.trim(),
-    size: "sm"
-  }, "Add")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: 'relative',
-      marginBottom: '10px'
-    }
-  }, /*#__PURE__*/React.createElement(I, {
-    n: "Search",
-    s: 15,
-    c: "var(--text3)",
-    style: {
-      position: 'absolute',
-      left: '12px',
-      top: '50%',
-      transform: 'translateY(-50%)',
-      pointerEvents: 'none'
-    }
-  }), /*#__PURE__*/React.createElement("input", {
+  }, label))),
+  // search + manual add
+  /*#__PURE__*/React.createElement("input", {
     value: search,
     onChange: e => setSearch(e.target.value),
-    placeholder: "Search registered players...",
+    placeholder: "Search players…",
     style: {
       width: '100%',
-      padding: '11px 14px 11px 36px',
+      height: '44px',
+      boxSizing: 'border-box',
+      padding: '0 15px',
+      borderRadius: '12px',
       background: 'var(--surface)',
-      border: '1px solid var(--border2)',
-      borderRadius: 'var(--radius2)',
+      border: '1px solid var(--border)',
       color: 'var(--text)',
-      fontSize: '14px',
-      outline: 'none'
-    }
-  })), selected.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: '6px',
+      font: "500 14px 'DM Sans', sans-serif",
+      outline: 'none',
       marginBottom: '10px'
     }
-  }, selected.map(u => /*#__PURE__*/React.createElement("div", {
-    key: u.oderId,
-    onClick: () => removeSelected(u.oderId),
+  }),
+  // roster
+  /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '9px',
+      marginBottom: '14px'
+    }
+  },
+  // host row — always in, not toggleable
+  /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
-      gap: '6px',
-      background: 'var(--accent3)',
-      border: '1px solid rgba(79,229,138,0.4)',
-      borderRadius: '20px',
-      padding: '5px 10px 5px 8px',
-      cursor: 'pointer',
-      fontSize: '13px',
-      color: 'var(--accent)',
-      fontWeight: '600'
+      gap: '12px',
+      padding: '10px 12px',
+      borderRadius: '14px',
+      background: 'rgba(79,229,138,.07)',
+      border: '1px solid rgba(79,229,138,.32)'
     }
-  }, !u.isManual && /*#__PURE__*/React.createElement(Avatar, {
-    src: u.photoURL,
-    name: u.firstName,
-    size: 20
-  }), u.isManual && /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement(Avatar, {
+    src: userProfile === null || userProfile === void 0 ? void 0 : userProfile.photoURL,
+    name: `${(userProfile === null || userProfile === void 0 ? void 0 : userProfile.firstName) || ''} ${(userProfile === null || userProfile === void 0 ? void 0 : userProfile.lastName) || ''}`,
+    size: 42
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
-      width: '20px',
-      height: '20px',
-      borderRadius: '50%',
-      background: 'rgba(79,229,138,0.3)',
-      display: 'inline-flex',
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "600 15px/1.2 'DM Sans', sans-serif",
+      letterSpacing: '-0.01em',
+      color: 'var(--text)',
+      marginBottom: '3px'
+    }
+  }, (userProfile === null || userProfile === void 0 ? void 0 : userProfile.firstName) || 'You'), /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "400 12px/1 'DM Sans', sans-serif",
+      color: 'var(--text3)'
+    }
+  }, "Host \xB7 always playing")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '26px',
+      height: '26px',
+      flex: 'none',
+      borderRadius: '99px',
+      background: 'var(--accent)',
+      display: 'flex',
       alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: '10px'
+      justifyContent: 'center'
     }
-  }, "\u270E"), u.isManual ? u.firstName : `${u.firstName} ${u.lastName}`.trim(), /*#__PURE__*/React.createElement(I, {
-    n: "X",
-    s: 12,
-    c: "var(--accent)"
-  })))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      maxHeight: '180px',
-      overflowY: 'auto',
-      borderRadius: 'var(--radius2)',
-      border: '1px solid var(--border)'
-    }
-  }, filtered.length === 0 && search.length > 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: '16px',
-      textAlign: 'center',
-      color: 'var(--text3)',
-      fontSize: '13px'
-    }
-  }, "No players found. Use \"Add by name\" above.") : filtered.map(u => {
-    const isSelected = selected.some(s => s.oderId === u.oderId);
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "Check",
+    s: 13,
+    c: "var(--accent-ink)"
+  }))), [...selected.filter(x => x.isManual), ...filtered].map(u => {
+    const on = !!selected.find(x => x.oderId === u.oderId);
     return /*#__PURE__*/React.createElement("div", {
       key: u.oderId,
       onClick: () => toggle(u),
       style: {
         display: 'flex',
         alignItems: 'center',
-        gap: '10px',
+        gap: '12px',
         padding: '10px 12px',
-        borderBottom: '1px solid var(--border)',
+        borderRadius: '14px',
         cursor: 'pointer',
-        background: isSelected ? 'var(--accent4)' : 'transparent',
-        transition: 'background 0.1s'
+        background: on ? 'rgba(79,229,138,.07)' : 'var(--surface)',
+        border: `1px solid ${on ? 'rgba(79,229,138,.32)' : 'var(--border)'}`,
+        transition: 'all .15s'
       }
     }, /*#__PURE__*/React.createElement(Avatar, {
       src: u.photoURL,
-      name: `${u.firstName} ${u.lastName}`,
-      size: 34
+      name: `${u.firstName || ''} ${u.lastName || ''}`,
+      size: 42
     }), /*#__PURE__*/React.createElement("div", {
       style: {
-        flex: 1
+        flex: 1,
+        minWidth: 0
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
-        fontWeight: '600',
-        fontSize: '14px'
+        font: "600 15px/1.2 'DM Sans', sans-serif",
+        letterSpacing: '-0.01em',
+        color: 'var(--text)',
+        marginBottom: '3px',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
       }
-    }, u.firstName, " ", u.lastName), u.skillLevel && /*#__PURE__*/React.createElement("div", {
+    }, u.isManual ? u.firstName : `${u.firstName || ''} ${u.lastName || ''}`.trim()), /*#__PURE__*/React.createElement("div", {
       style: {
-        fontSize: '11px',
-        color: 'var(--text2)',
+        font: "400 12px/1 'DM Sans', sans-serif",
+        color: 'var(--text3)',
         textTransform: 'capitalize'
       }
-    }, u.skillLevel)), isSelected && /*#__PURE__*/React.createElement("div", {
+    }, u.isManual ? 'Added by name' : [u.skillLevel, u.location ? u.location.split(',')[0] : ''].filter(Boolean).join(' · ') || 'Player')), /*#__PURE__*/React.createElement("div", {
       style: {
-        width: '20px',
-        height: '20px',
-        borderRadius: '50%',
-        background: 'var(--accent)',
+        width: '26px',
+        height: '26px',
+        flex: 'none',
+        borderRadius: '99px',
+        background: on ? 'var(--accent)' : 'transparent',
+        border: `1px solid ${on ? 'var(--accent)' : 'var(--border2)'}`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        flexShrink: 0
+        transition: 'all .15s'
       }
-    }, /*#__PURE__*/React.createElement(I, {
+    }, on && /*#__PURE__*/React.createElement(I, {
       n: "Check",
-      s: 12,
+      s: 13,
       c: "var(--accent-ink)"
     })));
-  }))), /*#__PURE__*/React.createElement(Btn, {
-    onClick: startGame,
-    disabled: loading,
-    size: "lg",
-    icon: "Zap",
+  })),
+  // manual add
+  showManual ? /*#__PURE__*/React.createElement("div", {
     style: {
-      background: 'var(--accent)',
-      color: 'var(--accent-ink)'
+      display: 'flex',
+      gap: '8px',
+      marginBottom: '14px'
     }
-  }, loading ? 'Starting...' : `Start Instant Game${selected.length > 0 ? ` · ${selected.length + 1} players` : ''}`));
+  }, /*#__PURE__*/React.createElement("input", {
+    value: manualName,
+    onChange: e => setManualName(e.target.value),
+    onKeyDown: e => e.key === 'Enter' && addManualPlayer(),
+    placeholder: "Player name",
+    autoFocus: true,
+    style: {
+      flex: 1,
+      height: '44px',
+      boxSizing: 'border-box',
+      padding: '0 13px',
+      borderRadius: '12px',
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      color: 'var(--text)',
+      font: "500 14px 'DM Sans', sans-serif",
+      outline: 'none'
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    disabled: !manualName.trim(),
+    onClick: addManualPlayer,
+    style: {
+      height: '44px',
+      padding: '0 18px',
+      borderRadius: '12px',
+      border: 'none',
+      cursor: manualName.trim() ? 'pointer' : 'default',
+      background: manualName.trim() ? 'var(--accent)' : 'var(--surface2)',
+      color: manualName.trim() ? 'var(--accent-ink)' : 'var(--text3)',
+      font: "700 14px 'DM Sans', sans-serif"
+    }
+  }, "Add")) : /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowManual(true),
+    style: {
+      width: '100%',
+      height: '44px',
+      borderRadius: '12px',
+      background: 'transparent',
+      border: '1px dashed var(--border2)',
+      color: 'var(--text2)',
+      font: "600 13px 'DM Sans', sans-serif",
+      cursor: 'pointer',
+      marginBottom: '14px'
+    }
+  }, "＋ Add player by name (not on app)")),
+  // sticky footer CTA
+  /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(8,12,19,.92)',
+      backdropFilter: 'blur(14px)',
+      borderTop: '1px solid var(--border)',
+      padding: '14px 20px 30px',
+      zIndex: 310
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => canStart && startGame(),
+    disabled: !canStart || loading,
+    style: {
+      display: 'block',
+      width: '100%',
+      maxWidth: '460px',
+      margin: '0 auto',
+      height: '56px',
+      borderRadius: '16px',
+      border: 'none',
+      background: canStart && !loading ? 'var(--accent)' : 'var(--surface2)',
+      color: canStart && !loading ? 'var(--accent-ink)' : 'var(--text3)',
+      font: "700 15px 'DM Sans', sans-serif",
+      cursor: canStart && !loading ? 'pointer' : 'default',
+      transition: 'all .15s'
+    }
+  }, loading ? '…' : canStart ? `Start game · ${total} players` : 'Pick at least 4 players')));
 }
 
-// ==================== EVENTS SCREEN ====================
 function EventsScreen({
   onViewEvent,
   onCreateEvent
@@ -11628,7 +11720,8 @@ function PlayersScreen() {
 // ==================== PROFILE SCREEN ====================
 function ProfileScreen({
   onLogout,
-  setScreen
+  setScreen,
+  onViewEvent
 }) {
   var _userProfile$friends4, _userProfile$coachPro, _userProfile$coachPro2;
   const {
@@ -12585,8 +12678,28 @@ function ProfileScreen({
     var _g$dateTime;
     const d = (_g$dateTime = g.dateTime) !== null && _g$dateTime !== void 0 && _g$dateTime.toDate ? g.dateTime.toDate() : new Date(g.dateTime || Date.now());
     return /*#__PURE__*/React.createElement(Card, {
-      key: g.id
-    }, /*#__PURE__*/React.createElement("div", {
+      key: g.id,
+      onClick: () => onViewEvent && onViewEvent(g.id),
+      style: {
+        cursor: 'pointer'
+      }
+    }, g.isCompleted && /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        marginBottom: '8px'
+      }
+    }, /*#__PURE__*/React.createElement(I, {
+      n: "Award",
+      s: 12,
+      c: "var(--gold)"
+    }), /*#__PURE__*/React.createElement("span", {
+      className: "eyebrow-mono",
+      style: {
+        color: 'var(--gold)'
+      }
+    }, "Final scorecard \u2192")), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         justifyContent: 'space-between',
@@ -14993,7 +15106,8 @@ function App() {
   }), screen === 'profile' && /*#__PURE__*/React.createElement(ProfileScreen, {
     key: "profile",
     onLogout: () => navigate('home'),
-    setScreen: setScreen
+    setScreen: setScreen,
+    onViewEvent: id => navigate('events', id)
   }), showNav && /*#__PURE__*/React.createElement("nav", {
     style: {
       position: 'fixed',
