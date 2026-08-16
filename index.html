@@ -2505,8 +2505,7 @@ function LoginScreen({
       padding: '0 24px 40px',
       display: 'flex',
       flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center'
+      alignItems: 'center'
     }
   },
   // ── layer 2: scrim (exactly one) ──
@@ -2577,15 +2576,24 @@ function LoginScreen({
       borderBottomColor: 'transparent'
     }
   })))),
-  // ── foreground ──
+  // ── foreground: brand centered in the free space, CTAs at the bottom ──
   /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'relative',
       width: '100%',
       maxWidth: '360px',
+      flex: 1,
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2627,9 +2635,9 @@ function LoginScreen({
       textAlign: 'center',
       maxWidth: '280px'
     }
-  }, "It's time to dominate the court."), error && /*#__PURE__*/React.createElement("div", {
+  }, "It's time to dominate the court.")), error && /*#__PURE__*/React.createElement("div", {
     style: {
-      marginTop: '18px',
+      marginBottom: '14px',
       width: '100%',
       padding: '11px 14px',
       borderRadius: '12px',
@@ -2643,7 +2651,7 @@ function LoginScreen({
     onClick: handleGoogle,
     disabled: loading,
     style: {
-      marginTop: '34px',
+      marginTop: '0',
       width: '100%',
       height: '56px',
       borderRadius: '16px',
@@ -3579,8 +3587,38 @@ function EventsScreen({
     } else if (filter === 'mine') {
       q = q.where('hostId', '==', currentUser.uid);
     } else if (filter === 'past') {
-      // For past: use where only, sort handled client-side (avoids needing new index)
-      q = db.collection('events').where('dateTime', '<', now).orderBy('dateTime', 'desc');
+      // Past = date already gone OR game completed. A game finished ahead of
+      // its scheduled end must still land here — this is where players go to
+      // find its scorecard. Firestore can't OR across fields, so merge two
+      // subscriptions client-side.
+      const byId = {};
+      const apply = () => {
+        const evts = Object.values(byId).sort((a, b) => {
+          const at = a.dateTime && a.dateTime.toMillis ? a.dateTime.toMillis() : 0;
+          const bt = b.dateTime && b.dateTime.toMillis ? b.dateTime.toMillis() : 0;
+          return bt - at;
+        });
+        setEvents(evts.slice(0, 50));
+        setLoading(false);
+      };
+      const u1 = db.collection('events').where('dateTime', '<', now).orderBy('dateTime', 'desc').limit(50).onSnapshot(s => {
+        s.docs.forEach(d => byId[d.id] = {
+          id: d.id,
+          ...d.data()
+        });
+        apply();
+      }, () => setLoading(false));
+      const u2 = db.collection('events').where('isCompleted', '==', true).limit(50).onSnapshot(s => {
+        s.docs.forEach(d => byId[d.id] = {
+          id: d.id,
+          ...d.data()
+        });
+        apply();
+      }, () => setLoading(false));
+      return () => {
+        u1();
+        u2();
+      };
     } else if (filter === 'coaching') {
       // Games this user is assigned to coach — equality filter only, sort client-side (no composite index)
       q = db.collection('events').where('coachId', '==', currentUser.uid);
@@ -3590,8 +3628,9 @@ function EventsScreen({
         id: d.id,
         ...d.data()
       }));
-      // Hide cancelled events from upcoming tab
-      if (filter === 'upcoming') evts = evts.filter(e => !e.cancelled);
+      // Upcoming hides cancelled and already-completed games (a game can
+      // finish before its scheduled time; it belongs under Past then).
+      if (filter === 'upcoming') evts = evts.filter(e => !e.cancelled && !e.isCompleted);
       if (filter === 'coaching') {
         evts = evts.filter(e => !e.cancelled).sort((a, b) => {
           const at = a.dateTime && a.dateTime.toMillis ? a.dateTime.toMillis() : 0;
@@ -3809,12 +3848,14 @@ function EventsScreen({
   }, c.label))),
   // ── hosted card ──
   hosted && /*#__PURE__*/React.createElement("div", {
+    onClick: () => onViewEvent(hosted.id),
     style: {
       borderRadius: '18px',
       background: 'linear-gradient(160deg, var(--gold-tint), rgba(255,198,92,.04))',
       border: '1px solid var(--gold-edge)',
       padding: '17px',
-      marginBottom: '14px'
+      marginBottom: '14px',
+      cursor: 'pointer'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -6202,6 +6243,24 @@ function EventDetailScreen({
   // discards any RSVP that landed between our read and our write — two players
   // tapping Join at the same time used to leave only one of them on the game.
   const [rsvpError, setRsvpError] = useState('');
+  // ── final scorecard (completed games) ─────────────────────
+  // The scorecard is stored once in gameResults; every participant who opens
+  // the event sees the same record.
+  const [gameResult, setGameResult] = useState(null);
+  useEffect(() => {
+    if (!event || !event.isCompleted) {
+      setGameResult(null);
+      return;
+    }
+    const load = event.resultId ? db.collection('gameResults').doc(event.resultId).get().then(d => d.exists ? {
+      id: d.id,
+      ...d.data()
+    } : null) : db.collection('gameResults').where('eventId', '==', eventId).limit(1).get().then(s => s.empty ? null : {
+      id: s.docs[0].id,
+      ...s.docs[0].data()
+    });
+    load.then(r => setGameResult(r)).catch(() => {});
+  }, [event === null || event === void 0 ? void 0 : event.isCompleted, event === null || event === void 0 ? void 0 : event.resultId, eventId]);
   const handleRSVP = async action => {
     if (!currentUser || !event) return;
     const myInfo = {
@@ -7254,7 +7313,91 @@ function EventDetailScreen({
         whiteSpace: 'nowrap'
       }
     }, p.firstName || ((_p$userName = p.userName) === null || _p$userName === void 0 ? void 0 : _p$userName.split(' ')[0])));
-  }))), rsvpError && /*#__PURE__*/React.createElement("div", {
+  }))), event.isCompleted && gameResult && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '22px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "eyebrow",
+    style: {
+      marginBottom: '12px'
+    }
+  }, "Final scorecard \xB7 ", (() => {
+    const s = Math.floor((gameResult.durationMs || 0) / 1000);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} on court`;
+  })()), (gameResult.standings || []).map((st, i) => {
+    var _gameResult$players;
+    const pInfo = ((_gameResult$players = gameResult.players) === null || _gameResult$players === void 0 ? void 0 : _gameResult$players.find(x => x.playerId === st.playerId)) || {};
+    const top = (gameResult.standings || [])[0];
+    const pct = top && top.timeMs > 0 ? Math.max(3, Math.round(st.timeMs / top.timeMs * 100)) : 3;
+    const s = Math.floor((st.timeMs || 0) / 1000);
+    const clock = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    const first = i === 0;
+    return /*#__PURE__*/React.createElement("div", {
+      key: st.playerId || i,
+      style: {
+        borderRadius: '14px',
+        padding: '11px 13px',
+        marginBottom: '8px',
+        background: first ? 'linear-gradient(160deg, var(--gold-tint), rgba(255,198,92,.04))' : 'var(--surface)',
+        border: `1px solid ${first ? 'var(--gold-edge)' : 'var(--border)'}`
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        marginBottom: '7px'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "mono",
+      style: {
+        font: "400 12px/1 var(--mono)",
+        color: first ? 'var(--gold)' : 'var(--text3)',
+        width: '16px',
+        flex: 'none'
+      }
+    }, st.rank), first && /*#__PURE__*/React.createElement(I, {
+      n: "Crown",
+      s: 13,
+      c: "var(--gold)"
+    }), /*#__PURE__*/React.createElement(Avatar, {
+      src: pInfo.photoURL,
+      name: pInfo.name || st.playerId,
+      size: 26
+    }), /*#__PURE__*/React.createElement("span", {
+      style: {
+        flex: 1,
+        minWidth: 0,
+        font: "600 14px/1 'DM Sans', sans-serif",
+        color: 'var(--text)',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, pInfo.name || 'Player'), /*#__PURE__*/React.createElement("span", {
+      className: "mono",
+      style: {
+        font: "400 13px/1 var(--mono)",
+        color: first ? 'var(--gold)' : 'var(--text2)',
+        flex: 'none'
+      }
+    }, clock, " \xB7 ", st.wins || 0, "W", st.winners ? ` · ${st.winners}🔥` : '')), /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: '4px',
+        borderRadius: '99px',
+        background: 'var(--surface2)',
+        overflow: 'hidden'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: pct + '%',
+        height: '100%',
+        borderRadius: '99px',
+        background: first ? 'var(--gold)' : i < 3 ? 'var(--accent)' : 'rgba(79,229,138,.35)'
+      }
+    })));
+  })), rsvpError && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: '16px',
       padding: '10px 14px',
@@ -13234,7 +13377,7 @@ function LiveGameScreen({
         eventId: (event === null || event === void 0 ? void 0 : event.id) || null,
         hostId: (event === null || event === void 0 ? void 0 : event.hostId) || (currentUser === null || currentUser === void 0 ? void 0 : currentUser.uid) || null,
         format: format || 'kings',
-        durationMs: totalMs,
+        durationMs: liveTotal, // includes the reign in flight when End was tapped
         winnerId: topId || null,
         players: gamePlayers.map(p => ({
           playerId: p.id || '',
