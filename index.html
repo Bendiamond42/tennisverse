@@ -4007,6 +4007,107 @@ function EventsScreen({
   }), "Host a game")));
 }
 
+// ── Host form scaffolding (module scope: stable identity, so typing in a row
+//    never remounts the row and drops focus) ────────────────────────────────
+function HostRow({
+  icon,
+  top,
+  children
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: '14px',
+      marginBottom: '22px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '22px',
+      flex: 'none',
+      display: 'flex',
+      justifyContent: 'center',
+      paddingTop: (top === undefined ? 12 : top) + 'px'
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: icon,
+    s: 19,
+    c: "var(--text3)"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, children));
+}
+function HostChip({
+  on,
+  onClick,
+  grow,
+  children
+}) {
+  return /*#__PURE__*/React.createElement("button", {
+    onClick: onClick,
+    style: {
+      height: '44px',
+      padding: '0 15px',
+      borderRadius: '12px',
+      cursor: 'pointer',
+      flex: grow ? 1 : 'none',
+      background: on ? 'var(--accent3)' : 'var(--surface)',
+      border: `1px solid ${on ? 'var(--accent-edge)' : 'var(--border)'}`,
+      color: on ? 'var(--accent)' : 'var(--text)',
+      font: "600 14px 'DM Sans', sans-serif",
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      transition: 'all .15s',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '7px'
+    }
+  }, children);
+}
+// Bottom-sheet chrome shared by the date / time / repeat sheets.
+function HostSheet({
+  onClose,
+  children
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    onClick: onClose,
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(6,10,16,.7)',
+      backdropFilter: 'blur(6px)',
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+      zIndex: 400
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.stopPropagation(),
+    style: {
+      width: '100%',
+      maxWidth: '500px',
+      background: 'var(--bg3)',
+      borderRadius: '24px 24px 0 0',
+      padding: '14px 18px 30px',
+      animation: 'tvin .22s ease-out',
+      maxHeight: '80vh',
+      overflowY: 'auto'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '38px',
+      height: '4px',
+      borderRadius: '99px',
+      background: 'var(--surface2)',
+      margin: '0 auto 16px'
+    }
+  }), children));
+}
+
 function CreateEventScreen({
   onBack,
   onCreated
@@ -4035,8 +4136,14 @@ function CreateEventScreen({
     allowWaitlist: true,
     coach: null,
     invitedPlayers: [],
-    notes: ''
+    notes: '',
+    durationMin: 120,
+    repeat: 'Does not repeat'
   });
+  const notesRef = useRef(null);
+  const [sheet, setSheet] = useState(null); // 'date' | 'time' | 'repeat'
+  const [timeTarget, setTimeTarget] = useState('start');
+  const [calMonth, setCalMonth] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [manualCoachName, setManualCoachName] = useState('');
@@ -4260,6 +4367,8 @@ function CreateEventScreen({
         coachId: ((_form$coach = form.coach) === null || _form$coach === void 0 ? void 0 : _form$coach.id) || null,
         coachName: form.coach ? `${form.coach.firstName} ${form.coach.lastName}`.trim() : '',
         notes: form.notes.trim(),
+        durationMin: form.durationMin || 120,
+        repeat: form.repeat || 'Does not repeat',
         hostId: currentUser.uid,
         hostName: `${(userProfile === null || userProfile === void 0 ? void 0 : userProfile.firstName) || ''} ${(userProfile === null || userProfile === void 0 ? void 0 : userProfile.lastName) || ''}`.trim() || currentUser.email,
         hostPhotoURL: (userProfile === null || userProfile === void 0 ? void 0 : userProfile.photoURL) || '',
@@ -4358,452 +4467,1043 @@ function CreateEventScreen({
       onChange: onChange
     }));
   };
+  // ── Host a game (icon-gutter layout, bottom sheets) ───────
+  const startMin = (form.hour % 12 + (form.ampm === 'PM' ? 12 : 0)) * 60 + (parseInt(form.minute) || 0);
+  const setStartMin = min => {
+    const h24 = Math.floor(min / 60) % 24;
+    setForm(f => ({
+      ...f,
+      hour: h24 % 12 === 0 ? 12 : h24 % 12,
+      minute: min % 60,
+      ampm: h24 >= 12 ? 'PM' : 'AM'
+    }));
+  };
+  const fmtMin = min => {
+    const h24 = Math.floor(min / 60) % 24;
+    const h = h24 % 12 === 0 ? 12 : h24 % 12;
+    return `${h}:${String(min % 60).padStart(2, '0')} ${h24 >= 12 ? 'PM' : 'AM'}`;
+  };
+  const durMin = form.durationMin || 120;
+  const durLabel = m => m % 60 === 0 ? `${m / 60}h` : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
+  const SLOTS = [];
+  for (let m = 6 * 60; m <= 22 * 60; m += 15) SLOTS.push(m);
+  const dayName = (form.date instanceof Date ? form.date : new Date()).toLocaleDateString('en-US', {
+    weekday: 'long'
+  });
+  const REPEATS = ['Does not repeat', 'Daily', `Weekly on ${dayName}`, 'Every weekday', 'Monthly'];
+  const noteLen = (form.notes || '').length;
+  // Custom cap slider: pointer events on the track per the handoff.
+  const capFromEvent = e => {
+    const track = e.currentTarget;
+    const r = track.getBoundingClientRect();
+    const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    setForm(f => ({
+      ...f,
+      maxPlayers: Math.round(2 + x * 28)
+    }));
+  };
+  // Date-sheet month cursor
+  const calBase = calMonth || (form.date instanceof Date ? new Date(form.date.getFullYear(), form.date.getMonth(), 1) : new Date());
+  const calDays = (() => {
+    const first = new Date(calBase.getFullYear(), calBase.getMonth(), 1);
+    const cells = [];
+    for (let i = 0; i < first.getDay(); i++) cells.push(null);
+    const dim = new Date(calBase.getFullYear(), calBase.getMonth() + 1, 0).getDate();
+    for (let d = 1; d <= dim; d++) cells.push(new Date(calBase.getFullYear(), calBase.getMonth(), d));
+    return cells;
+  })();
+  const sameDay = (a, b) => a && b && a.toDateString() === b.toDateString();
+  const todayD = new Date();
   return /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: '100vh',
       background: 'var(--bg)',
-      paddingBottom: '80px'
+      paddingBottom: '110px'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       maxWidth: '500px',
       margin: '0 auto',
-      padding: '24px 20px'
+      padding: '20px 20px 0'
     }
-  }, /*#__PURE__*/React.createElement(PageHeader, {
-    title: "New Game",
-    onBack: onBack,
-    right: /*#__PURE__*/React.createElement(Btn, {
-      onClick: handleSubmit,
-      disabled: saving,
-      size: "sm"
-    }, saving ? 'Saving...' : 'Save')
-  }), error && /*#__PURE__*/React.createElement("div", {
+  },
+  // ── header: ✕ · NEW GAME · spacer ──
+  /*#__PURE__*/React.createElement("div", {
     style: {
-      background: 'rgba(255,107,107,0.1)',
-      border: '1px solid rgba(255,107,107,0.3)',
-      borderRadius: 'var(--radius2)',
-      padding: '12px 16px',
-      marginBottom: '16px',
-      color: '#FF6B6B',
-      fontSize: '14px'
-    }
-  }, error), savedMsg && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: 'var(--accent3)',
-      border: '1px solid rgba(79,229,138,0.3)',
-      borderRadius: 'var(--radius2)',
-      padding: '10px 14px',
-      marginBottom: '14px',
-      color: 'var(--accent)',
-      fontSize: '13px',
-      fontWeight: '600',
       display: 'flex',
       alignItems: 'center',
-      gap: '8px'
+      justifyContent: 'space-between',
+      marginBottom: '24px'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    style: {
+      width: '40px',
+      height: '40px',
+      borderRadius: '13px',
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      color: 'var(--text2)',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
     }
   }, /*#__PURE__*/React.createElement(I, {
-    n: "Check",
-    s: 14,
-    c: "var(--accent)"
-  }), savedMsg), templates.length > 0 && /*#__PURE__*/React.createElement("div", {
+    n: "X",
+    s: 16,
+    c: "currentColor"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "eyebrow-mono"
+  }, "New game"), /*#__PURE__*/React.createElement("div", {
     style: {
-      marginBottom: '18px'
+      width: '40px'
     }
-  }, /*#__PURE__*/React.createElement(SectionLabel, null, "Start from a template"), /*#__PURE__*/React.createElement("div", {
+  })), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '16px',
+      padding: '11px 14px',
+      borderRadius: '12px',
+      background: 'rgba(255,107,107,.08)',
+      border: '1px solid rgba(255,107,107,.3)',
+      color: 'var(--red)',
+      font: "500 13px 'DM Sans', sans-serif"
+    }
+  }, error),
+  // ── title over the green underline ──
+  /*#__PURE__*/React.createElement("input", {
+    value: form.title,
+    onChange: e => setForm(f => ({
+      ...f,
+      title: e.target.value
+    })),
+    placeholder: "Riverside Bowl",
+    style: {
+      width: '100%',
+      boxSizing: 'border-box',
+      background: 'transparent',
+      border: 'none',
+      borderBottom: '2px solid var(--accent)',
+      outline: 'none',
+      color: 'var(--text)',
+      font: "800 26px/1.2 'DM Sans', sans-serif",
+      letterSpacing: '-0.03em',
+      padding: '0 0 12px',
+      marginBottom: '26px'
+    }
+  }),
+  // ── clock row: date chip · start–end + duration · repeat chip ──
+  /*#__PURE__*/React.createElement(HostRow, {
+    icon: "Clock",
+    top: 0
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '8px',
+      display: 'flex'
+    }
+  }, /*#__PURE__*/React.createElement(HostChip, {
+    grow: true,
+    on: false,
+    onClick: () => {
+      setCalMonth(new Date((form.date instanceof Date ? form.date : new Date()).getFullYear(), (form.date instanceof Date ? form.date : new Date()).getMonth(), 1));
+      setSheet('date');
+    }
+  }, (form.date instanceof Date ? form.date : new Date()).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric'
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      marginBottom: '8px'
+    }
+  }, /*#__PURE__*/React.createElement(HostChip, {
+    on: false,
+    onClick: () => {
+      setTimeTarget('start');
+      setSheet('time');
+    }
+  }, fmtMin(startMin)), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: 'var(--text3)',
+      font: "400 13px 'DM Sans', sans-serif"
+    }
+  }, "–"), /*#__PURE__*/React.createElement(HostChip, {
+    on: false,
+    onClick: () => {
+      setTimeTarget('end');
+      setSheet('time');
+    }
+  }, fmtMin(startMin + durMin)), /*#__PURE__*/React.createElement("span", {
+    className: "mono",
+    style: {
+      font: "400 12px var(--mono)",
+      color: 'var(--text3)'
+    }
+  }, durLabel(durMin))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex'
+    }
+  }, /*#__PURE__*/React.createElement(HostChip, {
+    on: false,
+    onClick: () => setSheet('repeat')
+  }, form.repeat || REPEATS[0], /*#__PURE__*/React.createElement(I, {
+    n: "ChevronDown",
+    s: 14,
+    c: "var(--text3)"
+  })))),
+  // ── location row ──
+  /*#__PURE__*/React.createElement(HostRow, {
+    icon: "MapPin",
+    top: 0
+  }, /*#__PURE__*/React.createElement("input", {
+    value: form.location,
+    onChange: e => setForm(f => ({
+      ...f,
+      location: e.target.value
+    })),
+    placeholder: "Where are you playing?",
+    style: {
+      width: '100%',
+      height: '44px',
+      boxSizing: 'border-box',
+      padding: '0 15px',
+      borderRadius: '12px',
+      background: 'var(--surface)',
+      border: `1px solid ${form.location.trim() ? 'var(--accent-edge)' : 'var(--border)'}`,
+      color: 'var(--text)',
+      font: "500 14px 'DM Sans', sans-serif",
+      outline: 'none'
+    }
+  }), savedLocations.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: '8px',
       overflowX: 'auto',
-      paddingBottom: '4px'
+      marginTop: '8px'
     }
-  }, templates.map(t => /*#__PURE__*/React.createElement("div", {
-    key: t.id,
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      flexShrink: 0,
-      background: 'var(--surface)',
-      border: '1px solid var(--border2)',
-      borderRadius: '20px',
-      padding: '7px 8px 7px 14px'
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    onClick: () => applyTemplate(t),
-    style: {
-      fontSize: '13px',
-      fontWeight: '600',
-      color: 'var(--text)',
-      cursor: 'pointer',
-      whiteSpace: 'nowrap'
-    }
-  }, t.name), /*#__PURE__*/React.createElement("span", {
-    onClick: () => deleteTemplate(t.id),
-    style: {
-      display: 'flex',
-      cursor: 'pointer'
-    }
-  }, /*#__PURE__*/React.createElement(I, {
-    n: "X",
-    s: 12,
-    c: "var(--text3)"
-  })))))), /*#__PURE__*/React.createElement(SectionLabel, null, "Details"), /*#__PURE__*/React.createElement(Input, {
-    label: "Title",
-    value: form.title,
-    onChange: e => setForm({
-      ...form,
-      title: e.target.value
-    }),
-    placeholder: "e.g. Sunday Doubles"
-  }), /*#__PURE__*/React.createElement(LocationInput, {
-    label: "Location",
-    value: form.location,
-    onChange: (loc, coords) => setForm({
-      ...form,
-      location: loc,
-      locationCoords: coords
-    }),
-    placeholder: "Search court or venue..."
-  }), (savedLocations.length > 0 || form.location && form.location.trim()) && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: '6px',
-      marginTop: '-6px',
-      marginBottom: '18px'
-    }
-  }, form.location && form.location.trim() && !savedLocations.some(l => l.address === form.location.trim()) && /*#__PURE__*/React.createElement("button", {
-    onClick: saveCurrentLocation,
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '5px',
-      background: 'transparent',
-      border: '1px dashed rgba(79,229,138,0.4)',
-      borderRadius: '20px',
-      padding: '6px 12px',
-      color: 'var(--accent)',
-      fontSize: '12px',
-      fontWeight: '600',
-      cursor: 'pointer'
-    }
-  }, /*#__PURE__*/React.createElement(I, {
-    n: "StarOutline",
-    s: 13,
-    c: "var(--accent)"
-  }), "Save this location"), savedLocations.map(l => /*#__PURE__*/React.createElement("div", {
+  }, savedLocations.slice(0, 5).map(l => /*#__PURE__*/React.createElement(HostChip, {
     key: l.id,
+    on: form.location === l.address,
+    onClick: () => applySavedLocation(l)
+  }, l.label)))),
+  // ── visibility row ──
+  /*#__PURE__*/React.createElement(HostRow, {
+    icon: "Users",
+    top: 0
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
-      alignItems: 'center',
-      gap: '6px',
+      padding: '5px',
       background: 'var(--surface)',
-      border: '1px solid var(--border2)',
-      borderRadius: '20px',
-      padding: '6px 8px 6px 12px'
+      borderRadius: '13px',
+      marginBottom: '10px'
     }
-  }, /*#__PURE__*/React.createElement("span", {
-    onClick: () => applySavedLocation(l),
+  }, [[true, 'Private'], [false, 'Public']].map(([priv, label]) => /*#__PURE__*/React.createElement("button", {
+    key: label,
+    onClick: () => setForm(f => ({
+      ...f,
+      isPrivate: priv
+    })),
     style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '5px',
-      fontSize: '12px',
-      fontWeight: '600',
-      color: 'var(--text2)',
+      flex: 1,
+      height: '42px',
+      borderRadius: '10px',
+      border: 'none',
+      background: form.isPrivate === priv ? 'rgba(79,229,138,.14)' : 'transparent',
+      color: form.isPrivate === priv ? 'var(--accent)' : 'var(--text2)',
+      font: "600 14px 'DM Sans', sans-serif",
       cursor: 'pointer',
-      whiteSpace: 'nowrap'
+      transition: 'all .15s'
     }
-  }, /*#__PURE__*/React.createElement(I, {
-    n: "MapPin",
-    s: 12,
-    c: "var(--text3)"
-  }), l.label), /*#__PURE__*/React.createElement("span", {
-    onClick: () => deleteSavedLocation(l.id),
+  }, label))), /*#__PURE__*/React.createElement("div", {
     style: {
-      display: 'flex',
-      cursor: 'pointer'
+      font: "400 12px/1.5 'DM Sans', sans-serif",
+      color: 'var(--text3)',
+      marginBottom: '14px'
     }
-  }, /*#__PURE__*/React.createElement(I, {
-    n: "X",
-    s: 11,
-    c: "var(--text3)"
-  }))))), /*#__PURE__*/React.createElement(SectionLabel, null, "Date & Time"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: '10px',
-      marginBottom: '20px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    onClick: () => setShowDatePicker(true),
-    style: {
-      flex: '1 1 55%',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '10px',
-      padding: '13px 16px',
-      background: 'var(--surface)',
-      border: '1px solid var(--border2)',
-      borderRadius: 'var(--radius2)',
-      cursor: 'pointer'
-    }
-  }, /*#__PURE__*/React.createElement(I, {
-    n: "Calendar",
-    s: 17,
-    c: "var(--accent)"
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: '14px',
-      fontWeight: '700'
-    }
-  }, fmtDate(form.date))), /*#__PURE__*/React.createElement("div", {
-    onClick: () => setShowTimePicker(true),
-    style: {
-      flex: '1 1 45%',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '10px',
-      padding: '13px 16px',
-      background: 'var(--surface)',
-      border: '1px solid var(--border2)',
-      borderRadius: 'var(--radius2)',
-      cursor: 'pointer'
-    }
-  }, /*#__PURE__*/React.createElement(I, {
-    n: "Clock",
-    s: 17,
-    c: "var(--accent)"
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: '14px',
-      fontWeight: '700'
-    }
-  }, fmtTime()))), /*#__PURE__*/React.createElement(SectionLabel, null, "Coach (optional)"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: '20px'
-    }
-  }, form.coach ? /*#__PURE__*/React.createElement("div", {
+  }, form.isPrivate ? 'Only invited players can see and join this game.' : 'Anyone nearby can find and join, up to the cap.'),
+  // cap: checkbox enabling a custom drag slider
+  /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
-      gap: '12px',
-      padding: '12px 16px',
-      background: 'rgba(96,165,250,0.08)',
-      border: '1px solid rgba(96,165,250,0.3)',
-      borderRadius: 'var(--radius2)'
+      gap: '11px',
+      marginBottom: '10px'
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setForm(f => ({
+      ...f,
+      hasMaxPlayers: !f.hasMaxPlayers
+    })),
     style: {
-      width: '40px',
-      height: '40px',
-      borderRadius: '50%',
-      background: 'rgba(96,165,250,0.15)',
+      width: '20px',
+      height: '20px',
+      flex: 'none',
+      borderRadius: '6px',
+      cursor: 'pointer',
+      background: form.hasMaxPlayers ? 'var(--accent)' : 'transparent',
+      border: `1px solid ${form.hasMaxPlayers ? 'var(--accent)' : 'var(--border2)'}`,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      flexShrink: 0
+      padding: 0
     }
-  }, form.coach.photoURL ? /*#__PURE__*/React.createElement(Avatar, {
-    src: form.coach.photoURL,
-    name: `${form.coach.firstName} ${form.coach.lastName}`,
-    size: 40
-  }) : /*#__PURE__*/React.createElement(I, {
-    n: "Award",
-    s: 20,
-    c: "#93c5fd"
-  })), /*#__PURE__*/React.createElement("div", {
+  }, form.hasMaxPlayers && /*#__PURE__*/React.createElement(I, {
+    n: "Check",
+    s: 12,
+    c: "var(--accent-ink)"
+  })), /*#__PURE__*/React.createElement("span", {
     style: {
-      flex: 1
+      flex: 1,
+      font: "500 14px 'DM Sans', sans-serif",
+      color: form.hasMaxPlayers ? 'var(--text)' : 'var(--text3)'
+    }
+  }, "Cap the number of players"), /*#__PURE__*/React.createElement("span", {
+    className: "mono",
+    style: {
+      font: "400 15px var(--mono)",
+      color: form.hasMaxPlayers ? 'var(--accent)' : 'var(--text3)'
+    }
+  }, form.maxPlayers)), /*#__PURE__*/React.createElement("div", {
+    onPointerDown: e => {
+      if (!form.hasMaxPlayers) return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      capFromEvent(e);
+    },
+    onPointerMove: e => {
+      if (!form.hasMaxPlayers || e.buttons !== 1) return;
+      capFromEvent(e);
+    },
+    style: {
+      padding: '8px 0 14px',
+      cursor: form.hasMaxPlayers ? 'pointer' : 'default',
+      opacity: form.hasMaxPlayers ? 1 : 0.35,
+      touchAction: 'none'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontWeight: '700',
-      fontSize: '14px'
+      position: 'relative',
+      height: '4px',
+      borderRadius: '99px',
+      background: 'var(--surface2)'
     }
-  }, form.coach.firstName, " ", form.coach.lastName), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: '12px',
-      color: '#93c5fd'
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: `${(form.maxPlayers - 2) / 28 * 100}%`,
+      borderRadius: '99px',
+      background: 'var(--accent)'
     }
-  }, form.coach.manual ? 'Added manually' : ((_form$coach$coachProf = form.coach.coachProfile) === null || _form$coach$coachProf === void 0 ? void 0 : _form$coach$coachProf.title) || 'Coach', (_form$coach$coachProf2 = form.coach.coachProfile) !== null && _form$coach$coachProf2 !== void 0 && _form$coach$coachProf2.rate ? ` · $${form.coach.coachProfile.rate}/hr` : '')), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setForm(f => ({
-      ...f,
-      coach: null
-    })),
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
-      background: 'rgba(255,107,107,0.1)',
-      border: '1px solid rgba(255,107,107,0.2)',
-      borderRadius: '8px',
-      padding: '6px 10px',
-      color: 'var(--red)',
-      cursor: 'pointer',
-      fontSize: '12px',
-      fontWeight: '600'
+      position: 'absolute',
+      top: '50%',
+      left: `${(form.maxPlayers - 2) / 28 * 100}%`,
+      transform: 'translate(-50%, -50%)',
+      width: '18px',
+      height: '18px',
+      borderRadius: '99px',
+      background: 'var(--accent)',
+      border: '3px solid #080C13'
     }
-  }, "Remove")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    onClick: () => {
-      setShowCoachPicker(!showCoachPicker);
-      setShowManualCoach(false);
-    },
+  }))),
+  // invite row — Private only, enters with tvin
+  form.isPrivate && /*#__PURE__*/React.createElement("div", {
+    onClick: () => setShowInvitePicker(true),
     style: {
       display: 'flex',
       alignItems: 'center',
-      gap: '12px',
-      padding: '13px 16px',
+      gap: '10px',
+      height: '48px',
+      padding: '0 14px',
+      borderRadius: '12px',
       background: 'var(--surface)',
-      border: '1px solid var(--border2)',
-      borderRadius: showCoachPicker ? 'var(--radius2) var(--radius2) 0 0' : 'var(--radius2)',
-      cursor: 'pointer'
+      border: '1px solid var(--border)',
+      cursor: 'pointer',
+      animation: 'tvin .22s ease-out'
     }
-  }, /*#__PURE__*/React.createElement(I, {
-    n: "Award",
-    s: 17,
-    c: "var(--text3)"
-  }), /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("span", {
     style: {
-      fontSize: '14px',
-      color: 'var(--text3)',
-      flex: 1
+      flex: 1,
+      font: "500 14px 'DM Sans', sans-serif",
+      color: 'var(--text)'
     }
-  }, "Search coaches on Tennisverse..."), /*#__PURE__*/React.createElement(I, {
-    n: showCoachPicker ? 'ChevronDown' : 'ChevronRight',
+  }, "Invite players"), /*#__PURE__*/React.createElement("span", {
+    className: "mono",
+    style: {
+      font: "400 13px var(--mono)",
+      color: form.invitedPlayers.length ? 'var(--accent)' : 'var(--text3)'
+    }
+  }, form.invitedPlayers.length, " invited"), /*#__PURE__*/React.createElement(I, {
+    n: "ChevronRight",
     s: 16,
     c: "var(--text3)"
-  })), showCoachPicker && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: 'var(--surface)',
-      border: '1px solid var(--border2)',
-      borderTop: 'none',
-      borderRadius: '0 0 var(--radius2) var(--radius2)',
-      overflow: 'hidden'
-    }
+  }))),
+  // ── coach row ──
+  /*#__PURE__*/React.createElement(HostRow, {
+    icon: "Shield",
+    top: 0
   }, /*#__PURE__*/React.createElement("div", {
+    onClick: () => setShowCoachPicker(true),
     style: {
-      padding: '10px 12px',
-      borderBottom: '1px solid var(--border)',
-      background: 'var(--bg)'
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      height: '48px',
+      padding: '0 14px',
+      borderRadius: '12px',
+      background: 'var(--surface)',
+      border: `1px solid ${form.coach ? 'var(--accent-edge)' : 'var(--border)'}`,
+      cursor: 'pointer'
     }
-  }, /*#__PURE__*/React.createElement("input", {
-    value: coachSearch,
-    onChange: e => setCoachSearch(e.target.value),
-    placeholder: "Search coaches...",
-    autoFocus: true,
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      font: "500 14px 'DM Sans', sans-serif",
+      color: form.coach ? 'var(--text)' : 'var(--text3)',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap'
+    }
+  }, form.coach ? `${form.coach.firstName} ${form.coach.lastName || ''}`.trim() : 'Add a coach to run the board'), form.coach && /*#__PURE__*/React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      setForm(f => ({
+        ...f,
+        coach: null
+      }));
+    },
+    style: {
+      background: 'none',
+      border: 'none',
+      color: 'var(--text3)',
+      cursor: 'pointer',
+      padding: '4px',
+      display: 'flex'
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "X",
+    s: 14,
+    c: "currentColor"
+  })), !form.coach && /*#__PURE__*/React.createElement(I, {
+    n: "ChevronRight",
+    s: 16,
+    c: "var(--text3)"
+  }))),
+  // ── notes row ──
+  /*#__PURE__*/React.createElement(HostRow, {
+    icon: "Zap",
+    top: 0
+  }, /*#__PURE__*/React.createElement("textarea", {
+    ref: notesRef,
+    value: form.notes,
+    maxLength: 400,
+    onChange: e => {
+      setForm(f => ({
+        ...f,
+        notes: e.target.value
+      }));
+      // Height from scrollHeight — wrapped lines must be measured, not
+      // counted from newlines.
+      const el = e.target;
+      el.style.height = 'auto';
+      el.style.height = el.scrollHeight + 'px';
+    },
+    placeholder: "Add notes for players",
     style: {
       width: '100%',
+      minHeight: '48px',
+      boxSizing: 'border-box',
+      resize: 'none',
+      overflow: 'hidden',
+      padding: '14px',
+      borderRadius: '12px',
       background: 'var(--surface)',
-      border: '1px solid var(--border2)',
-      borderRadius: 'var(--radius3)',
-      padding: '8px 12px',
+      border: `1px solid ${noteLen ? 'rgba(79,229,138,.3)' : 'var(--border)'}`,
       color: 'var(--text)',
-      fontSize: '14px',
+      font: "400 14px/1.5 'DM Sans', sans-serif",
       outline: 'none'
     }
-  })), /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "mono",
     style: {
-      maxHeight: '200px',
-      overflowY: 'auto'
+      textAlign: 'right',
+      marginTop: '6px',
+      font: "400 11px var(--mono)",
+      color: noteLen > 240 ? 'var(--red)' : 'var(--text3)'
     }
-  }, filteredCoaches.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, noteLen, "/240")),
+  // ── save as template: confirm-in-place, no navigation, no toast ──
+  /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      if (savingTemplate || savedMsg) return;
+      saveTemplate(); // name falls back to form.title
+    },
     style: {
-      padding: '14px 16px',
+      width: '100%',
+      height: '50px',
+      borderRadius: '13px',
+      background: 'transparent',
+      border: `1px dashed ${savedMsg ? 'var(--accent)' : 'var(--border2)'}`,
+      color: savedMsg ? 'var(--accent)' : 'var(--text2)',
+      font: "600 13px 'DM Sans', sans-serif",
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '8px',
+      marginBottom: '10px',
+      transition: 'all .15s'
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "Star",
+    s: 15,
+    c: "currentColor"
+  }), savedMsg ? 'Saved as template' : savingTemplate ? 'Saving…' : 'Save as template'), templates.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: '8px',
+      overflowX: 'auto',
+      marginBottom: '10px'
+    }
+  }, templates.map(t => /*#__PURE__*/React.createElement(HostChip, {
+    key: t.id,
+    on: false,
+    onClick: () => applyTemplate(t)
+  }, t.name)))),
+  // ── sticky publish ──
+  /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(8,12,19,.92)',
+      backdropFilter: 'blur(14px)',
+      borderTop: '1px solid var(--border)',
+      padding: '14px 20px 30px',
+      zIndex: 100
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: handleSubmit,
+    disabled: saving || !form.title.trim() || !form.location.trim(),
+    style: {
+      display: 'block',
+      width: '100%',
+      maxWidth: '460px',
+      margin: '0 auto',
+      height: '56px',
+      borderRadius: '16px',
+      border: 'none',
+      background: !saving && form.title.trim() && form.location.trim() ? 'var(--accent)' : 'var(--surface2)',
+      color: !saving && form.title.trim() && form.location.trim() ? 'var(--accent-ink)' : 'var(--text3)',
+      font: "700 15px 'DM Sans', sans-serif",
+      cursor: !saving && form.title.trim() && form.location.trim() ? 'pointer' : 'default',
+      transition: 'all .15s'
+    }
+  }, saving ? 'Publishing…' : 'Publish Game')),
+  // ── date sheet ──
+  sheet === 'date' && /*#__PURE__*/React.createElement(HostSheet, {
+    onClose: () => setSheet(null)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: '14px'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setCalMonth(new Date(calBase.getFullYear(), calBase.getMonth() - 1, 1)),
+    style: {
+      width: '36px',
+      height: '36px',
+      borderRadius: '11px',
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      color: 'var(--text2)',
+      cursor: 'pointer'
+    }
+  }, "‹"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "700 16px 'DM Sans', sans-serif",
+      color: 'var(--text)'
+    }
+  }, calBase.toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric'
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setCalMonth(new Date(calBase.getFullYear(), calBase.getMonth() + 1, 1)),
+    style: {
+      width: '36px',
+      height: '36px',
+      borderRadius: '11px',
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      color: 'var(--text2)',
+      cursor: 'pointer'
+    }
+  }, "›")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(7,1fr)',
+      gap: '4px',
+      marginBottom: '6px'
+    }
+  }, ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
       textAlign: 'center',
+      font: "600 11px 'DM Sans', sans-serif",
       color: 'var(--text3)',
-      fontSize: '13px'
+      padding: '6px 0'
     }
-  }, coaches.length === 0 ? 'No coaches on Tennisverse yet' : 'No coaches match that name') : filteredCoaches.map(coach => {
-    var _coach$coachProfile, _coach$coachProfile2;
-    return /*#__PURE__*/React.createElement("div", {
-      key: coach.id,
-      onClick: () => {
-        setForm(f => ({
+  }, d))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(7,1fr)',
+      gap: '4px',
+      marginBottom: '16px'
+    }
+  }, calDays.map((d, i) => {
+    if (!d) return /*#__PURE__*/React.createElement("div", {
+      key: i
+    });
+    const past = d < new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate());
+    const isSel = sameDay(d, form.date instanceof Date ? form.date : null);
+    const isToday = sameDay(d, todayD);
+    return /*#__PURE__*/React.createElement("button", {
+      key: i,
+      disabled: past,
+      onClick: () => setForm(f => {
+        const nd = new Date(d);
+        return {
           ...f,
-          coach
-        }));
-        setShowCoachPicker(false);
-        setCoachSearch('');
+          date: nd
+        };
+      }),
+      style: {
+        height: '40px',
+        borderRadius: '11px',
+        cursor: past ? 'default' : 'pointer',
+        background: isSel ? 'var(--accent)' : 'transparent',
+        border: isToday && !isSel ? '1px solid var(--accent-edge)' : '1px solid transparent',
+        color: past ? 'var(--ink-faint)' : isSel ? 'var(--accent-ink)' : 'var(--text)',
+        font: `${isSel ? 700 : 500} 14px var(--mono)`
+      }
+    }, d.getDate());
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setSheet(null),
+    style: {
+      width: '100%',
+      height: '52px',
+      borderRadius: '14px',
+      border: 'none',
+      background: 'var(--accent)',
+      color: 'var(--accent-ink)',
+      font: "700 15px 'DM Sans', sans-serif",
+      cursor: 'pointer'
+    }
+  }, "Done \xB7 ", (form.date instanceof Date ? form.date : new Date()).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric'
+  }))),
+  // ── time sheet: start preserves duration; end list annotated ──
+  sheet === 'time' && /*#__PURE__*/React.createElement(HostSheet, {
+    onClose: () => setSheet(null)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "700 17px 'DM Sans', sans-serif",
+      letterSpacing: '-0.02em',
+      color: 'var(--text)',
+      textAlign: 'center',
+      marginBottom: '14px'
+    }
+  }, timeTarget === 'start' ? 'Starts at' : 'Ends at'), /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxHeight: '46vh',
+      overflowY: 'auto'
+    },
+    ref: el => {
+      if (el && !el.dataset.scrolled) {
+        el.dataset.scrolled = '1';
+        const active = el.querySelector('[data-active="1"]');
+        if (active) active.scrollIntoView({
+          block: 'center'
+        });
+      }
+    }
+  }, (timeTarget === 'start' ? SLOTS : SLOTS.filter(m => m > startMin)).map(m => {
+    const active = timeTarget === 'start' ? m === startMin : m === startMin + durMin;
+    return /*#__PURE__*/React.createElement("button", {
+      key: m,
+      "data-active": active ? '1' : '0',
+      onClick: () => {
+        if (timeTarget === 'start') {
+          // Google Calendar behavior: moving the start preserves the
+          // duration and shifts the end.
+          setStartMin(m);
+        } else {
+          setForm(f => ({
+            ...f,
+            durationMin: m - startMin
+          }));
+        }
+        setSheet(null);
       },
       style: {
         display: 'flex',
         alignItems: 'center',
-        gap: '12px',
-        padding: '11px 16px',
-        borderBottom: '1px solid var(--border)',
+        justifyContent: 'space-between',
+        width: '100%',
+        height: '46px',
+        padding: '0 14px',
+        borderRadius: '11px',
+        border: 'none',
+        background: active ? 'var(--accent3)' : 'transparent',
+        color: active ? 'var(--accent)' : 'var(--text)',
+        font: `500 15px var(--mono)`,
         cursor: 'pointer'
       }
+    }, /*#__PURE__*/React.createElement("span", null, fmtMin(m)), timeTarget === 'end' && /*#__PURE__*/React.createElement("span", {
+      style: {
+        font: "400 12px var(--mono)",
+        color: active ? 'var(--accent)' : 'var(--text3)'
+      }
+    }, durLabel(m - startMin)));
+  }))),
+  // ── repeat sheet: five options, single select ──
+  sheet === 'repeat' && /*#__PURE__*/React.createElement(HostSheet, {
+    onClose: () => setSheet(null)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "700 17px 'DM Sans', sans-serif",
+      letterSpacing: '-0.02em',
+      color: 'var(--text)',
+      textAlign: 'center',
+      marginBottom: '14px'
+    }
+  }, "Repeats"), REPEATS.map(rp => {
+    const on = (form.repeat || REPEATS[0]) === rp;
+    return /*#__PURE__*/React.createElement("button", {
+      key: rp,
+      onClick: () => {
+        setForm(f => ({
+          ...f,
+          repeat: rp
+        }));
+        setSheet(null);
+      },
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        width: '100%',
+        height: '48px',
+        padding: '0 14px',
+        borderRadius: '11px',
+        border: 'none',
+        background: on ? 'var(--accent3)' : 'transparent',
+        color: on ? 'var(--accent)' : 'var(--text)',
+        font: "500 14px 'DM Sans', sans-serif",
+        cursor: 'pointer'
+      }
+    }, rp, on && /*#__PURE__*/React.createElement(I, {
+      n: "Check",
+      s: 16,
+      c: "var(--accent)"
+    }));
+  })), showInvitePicker && /*#__PURE__*/React.createElement(HostSheet, {
+    onClose: () => setShowInvitePicker(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "700 17px 'DM Sans', sans-serif",
+      letterSpacing: '-0.02em',
+      color: 'var(--text)',
+      textAlign: 'center',
+      marginBottom: '14px'
+    }
+  }, "Invite players"), form.invitedPlayers.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: '7px',
+      marginBottom: '14px'
+    }
+  }, form.invitedPlayers.map(u => /*#__PURE__*/React.createElement("button", {
+    key: u.id,
+    onClick: () => setForm(f => ({
+      ...f,
+      invitedPlayers: f.invitedPlayers.filter(p => p.id !== u.id)
+    })),
+    title: "Tap to remove",
+    style: {
+      height: '38px',
+      padding: '0 12px',
+      borderRadius: '99px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '7px',
+      cursor: 'pointer',
+      background: u.manual ? 'var(--gold-tint)' : 'var(--accent3)',
+      border: `1px solid ${u.manual ? 'var(--gold-edge)' : 'var(--accent-edge)'}`,
+      color: u.manual ? 'var(--gold)' : 'var(--accent)',
+      font: "600 12px 'DM Sans', sans-serif"
+    }
+  }, u.firstName, " ", u.lastName || '', /*#__PURE__*/React.createElement(I, {
+    n: "X",
+    s: 11,
+    c: "currentColor"
+  })))), /*#__PURE__*/React.createElement("input", {
+    value: inviteSearch,
+    onChange: e => setInviteSearch(e.target.value),
+    placeholder: "Search players…",
+    style: {
+      width: '100%',
+      height: '46px',
+      boxSizing: 'border-box',
+      padding: '0 14px',
+      borderRadius: '12px',
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      color: 'var(--text)',
+      font: "500 14px 'DM Sans', sans-serif",
+      outline: 'none',
+      marginBottom: '10px'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxHeight: '30vh',
+      overflowY: 'auto',
+      marginBottom: '12px'
+    }
+  }, allUsers.filter(u => `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase().includes(inviteSearch.toLowerCase())).slice(0, 30).map(u => {
+    const on = form.invitedPlayers.some(p => p.id === u.id);
+    return /*#__PURE__*/React.createElement("div", {
+      key: u.id,
+      onClick: () => toggleInvite(u),
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '11px',
+        height: '48px',
+        padding: '0 10px',
+        borderRadius: '11px',
+        cursor: 'pointer',
+        background: on ? 'rgba(79,229,138,.07)' : 'transparent'
+      }
     }, /*#__PURE__*/React.createElement(Avatar, {
-      src: coach.photoURL,
-      name: `${coach.firstName} ${coach.lastName}`,
-      size: 38
+      src: u.photoURL,
+      name: `${u.firstName || ''} ${u.lastName || ''}`,
+      size: 32
+    }), /*#__PURE__*/React.createElement("span", {
+      style: {
+        flex: 1,
+        font: "600 14px 'DM Sans', sans-serif",
+        color: 'var(--text)',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, `${u.firstName || ''} ${u.lastName || ''}`.trim()), /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: '24px',
+        height: '24px',
+        borderRadius: '99px',
+        flex: 'none',
+        background: on ? 'var(--accent)' : 'transparent',
+        border: `1px solid ${on ? 'var(--accent)' : 'var(--border2)'}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }
+    }, on && /*#__PURE__*/React.createElement(I, {
+      n: "Check",
+      s: 13,
+      c: "var(--accent-ink)"
+    })));
+  }), allUsers.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: '18px',
+      font: "400 13px 'DM Sans', sans-serif",
+      color: 'var(--text3)'
+    }
+  }, "No other players on the app yet")),
+  // manual add — no account, added by name; the fix from the RSVP work
+  showManualPlayer ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: '8px',
+      marginBottom: '12px'
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    value: manualPlayerName,
+    onChange: e => setManualPlayerName(e.target.value),
+    placeholder: "Player name",
+    autoFocus: true,
+    style: {
+      flex: 1,
+      height: '44px',
+      boxSizing: 'border-box',
+      padding: '0 13px',
+      borderRadius: '12px',
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      color: 'var(--text)',
+      font: "500 14px 'DM Sans', sans-serif",
+      outline: 'none'
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    disabled: !manualPlayerName.trim(),
+    onClick: () => {
+      if (!manualPlayerName.trim()) return;
+      const [firstName, ...rest] = manualPlayerName.trim().split(' ');
+      setForm(f => ({
+        ...f,
+        invitedPlayers: [...f.invitedPlayers, {
+          id: 'manual_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+          firstName,
+          lastName: rest.join(' ') || '',
+          email: manualPlayerEmail.trim() || '',
+          manual: true
+        }]
+      }));
+      setManualPlayerName('');
+      setManualPlayerEmail('');
+      setShowManualPlayer(false);
+    },
+    style: {
+      height: '44px',
+      padding: '0 18px',
+      borderRadius: '12px',
+      border: 'none',
+      cursor: manualPlayerName.trim() ? 'pointer' : 'default',
+      background: manualPlayerName.trim() ? 'var(--accent)' : 'var(--surface2)',
+      color: manualPlayerName.trim() ? 'var(--accent-ink)' : 'var(--text3)',
+      font: "700 14px 'DM Sans', sans-serif"
+    }
+  }, "Add")) : /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowManualPlayer(true),
+    style: {
+      width: '100%',
+      height: '44px',
+      borderRadius: '12px',
+      background: 'transparent',
+      border: '1px dashed var(--border2)',
+      color: 'var(--text2)',
+      font: "600 13px 'DM Sans', sans-serif",
+      cursor: 'pointer',
+      marginBottom: '12px'
+    }
+  }, "＋ Add player manually (not on app)"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowInvitePicker(false),
+    style: {
+      width: '100%',
+      height: '52px',
+      borderRadius: '14px',
+      border: 'none',
+      background: 'var(--accent)',
+      color: 'var(--accent-ink)',
+      font: "700 15px 'DM Sans', sans-serif",
+      cursor: 'pointer'
+    }
+  }, "Invite ", form.invitedPlayers.length, " player", form.invitedPlayers.length === 1 ? '' : 's')), showCoachPicker && /*#__PURE__*/React.createElement(HostSheet, {
+    onClose: () => setShowCoachPicker(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "700 17px 'DM Sans', sans-serif",
+      letterSpacing: '-0.02em',
+      color: 'var(--text)',
+      textAlign: 'center',
+      marginBottom: '14px'
+    }
+  }, "Add a coach"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxHeight: '34vh',
+      overflowY: 'auto',
+      marginBottom: '12px'
+    }
+  }, coaches.filter(c => `${c.firstName || ''} ${c.lastName || ''}`.toLowerCase().includes(coachSearch.toLowerCase())).map(c => {
+    var _c$coachProfile;
+    const on = form.coach && form.coach.id === c.id;
+    return /*#__PURE__*/React.createElement("div", {
+      key: c.id,
+      onClick: () => {
+        setForm(f => ({
+          ...f,
+          coach: on ? null : c
+        }));
+        setShowCoachPicker(false);
+      },
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '11px',
+        height: '52px',
+        padding: '0 10px',
+        borderRadius: '11px',
+        cursor: 'pointer',
+        background: on ? 'rgba(79,229,138,.07)' : 'transparent'
+      }
+    }, /*#__PURE__*/React.createElement(Avatar, {
+      src: c.photoURL,
+      name: `${c.firstName || ''} ${c.lastName || ''}`,
+      size: 34
     }), /*#__PURE__*/React.createElement("div", {
       style: {
-        flex: 1
+        flex: 1,
+        minWidth: 0
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
-        fontWeight: '600',
-        fontSize: '14px'
+        font: "600 14px 'DM Sans', sans-serif",
+        color: 'var(--text)'
       }
-    }, coach.firstName, " ", coach.lastName), /*#__PURE__*/React.createElement("div", {
+    }, `${c.firstName || ''} ${c.lastName || ''}`.trim()), /*#__PURE__*/React.createElement("div", {
       style: {
-        fontSize: '12px',
-        color: 'var(--text2)'
+        font: "400 12px 'DM Sans', sans-serif",
+        color: 'var(--text3)'
       }
-    }, ((_coach$coachProfile = coach.coachProfile) === null || _coach$coachProfile === void 0 ? void 0 : _coach$coachProfile.title) || 'Coach', (_coach$coachProfile2 = coach.coachProfile) !== null && _coach$coachProfile2 !== void 0 && _coach$coachProfile2.rate ? ` · $${coach.coachProfile.rate}/hr` : '')), /*#__PURE__*/React.createElement(I, {
-      n: "ChevronRight",
-      s: 14,
-      c: "var(--text3)"
+    }, ((_c$coachProfile = c.coachProfile) === null || _c$coachProfile === void 0 ? void 0 : _c$coachProfile.title) || 'Coach')), on && /*#__PURE__*/React.createElement(I, {
+      n: "Check",
+      s: 16,
+      c: "var(--accent)"
     }));
-  }))), /*#__PURE__*/React.createElement("div", {
-    onClick: () => {
-      setShowManualCoach(!showManualCoach);
-      setShowCoachPicker(false);
-    },
+  }), coaches.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: '18px',
+      font: "400 13px 'DM Sans', sans-serif",
+      color: 'var(--text3)'
+    }
+  }, "No coaches on the app yet")), showManualCoach ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
-      alignItems: 'center',
-      gap: '10px',
-      padding: '10px 16px',
-      marginTop: '8px',
-      background: 'transparent',
-      border: '1px dashed rgba(255,255,255,0.12)',
-      borderRadius: 'var(--radius2)',
-      cursor: 'pointer'
-    }
-  }, /*#__PURE__*/React.createElement(I, {
-    n: "Plus",
-    s: 15,
-    c: "var(--text3)"
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: '13px',
-      color: 'var(--text3)',
-      fontWeight: '600'
-    }
-  }, "Add coach by name (not on app)")), showManualCoach && /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: '14px 16px',
-      background: 'var(--surface)',
-      border: '1px solid var(--border2)',
-      borderTop: 'none',
-      borderRadius: '0 0 var(--radius2) var(--radius2)',
-      marginTop: '-1px'
+      gap: '8px'
     }
   }, /*#__PURE__*/React.createElement("input", {
     value: manualCoachName,
     onChange: e => setManualCoachName(e.target.value),
-    placeholder: "Coach name...",
+    placeholder: "Coach name",
     autoFocus: true,
     style: {
-      width: '100%',
-      padding: '11px 14px',
-      background: 'var(--bg)',
-      border: '1px solid var(--border2)',
-      borderRadius: 'var(--radius3)',
+      flex: 1,
+      height: '44px',
+      boxSizing: 'border-box',
+      padding: '0 13px',
+      borderRadius: '12px',
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
       color: 'var(--text)',
-      fontSize: '14px',
-      outline: 'none',
-      marginBottom: '10px'
+      font: "500 14px 'DM Sans', sans-serif",
+      outline: 'none'
     }
   }), /*#__PURE__*/React.createElement("button", {
     disabled: !manualCoachName.trim(),
@@ -4821,502 +5521,33 @@ function CreateEventScreen({
       }));
       setManualCoachName('');
       setShowManualCoach(false);
+      setShowCoachPicker(false);
     },
     style: {
-      width: '100%',
-      padding: '11px',
-      borderRadius: 'var(--radius2)',
+      height: '44px',
+      padding: '0 18px',
+      borderRadius: '12px',
+      border: 'none',
+      cursor: manualCoachName.trim() ? 'pointer' : 'default',
       background: manualCoachName.trim() ? 'var(--accent)' : 'var(--surface2)',
-      border: 'none',
       color: manualCoachName.trim() ? 'var(--accent-ink)' : 'var(--text3)',
-      fontSize: '14px',
-      fontWeight: '700',
-      cursor: manualCoachName.trim() ? 'pointer' : 'default'
+      font: "700 14px 'DM Sans', sans-serif"
     }
-  }, "Add Coach")))), /*#__PURE__*/React.createElement(SectionLabel, null, "Invite Players (optional)"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: '20px'
-    }
-  }, form.invitedPlayers.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: '6px',
-      marginBottom: '10px'
-    }
-  }, form.invitedPlayers.map(u => /*#__PURE__*/React.createElement("div", {
-    key: u.id,
-    onClick: () => toggleInvite(u),
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '6px',
-      background: u.manual ? 'rgba(255,198,92,0.1)' : 'var(--accent3)',
-      border: `1px solid ${u.manual ? 'rgba(255,198,92,0.3)' : 'rgba(79,229,138,0.35)'}`,
-      borderRadius: '20px',
-      padding: '5px 10px 5px 7px',
-      cursor: 'pointer',
-      fontSize: '13px',
-      color: u.manual ? '#FFC65C' : 'var(--accent)',
-      fontWeight: '600'
-    }
-  }, u.manual ? /*#__PURE__*/React.createElement(I, {
-    n: "UserPlus",
-    s: 13,
-    c: "#FFC65C"
-  }) : /*#__PURE__*/React.createElement(Avatar, {
-    src: u.photoURL,
-    name: `${u.firstName} ${u.lastName}`,
-    size: 20
-  }), u.firstName, u.lastName ? ' ' + u.lastName.charAt(0) + '.' : '', " ", /*#__PURE__*/React.createElement(I, {
-    n: "X",
-    s: 12,
-    c: "currentColor"
-  })))), /*#__PURE__*/React.createElement("div", {
-    onClick: () => {
-      setShowInvitePicker(!showInvitePicker);
-      setShowManualPlayer(false);
-    },
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-      padding: '13px 16px',
-      background: 'var(--surface)',
-      border: '1px solid var(--border2)',
-      borderRadius: showInvitePicker ? 'var(--radius2) var(--radius2) 0 0' : 'var(--radius2)',
-      cursor: 'pointer'
-    }
-  }, /*#__PURE__*/React.createElement(I, {
-    n: "Users",
-    s: 17,
-    c: "var(--text3)"
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: '14px',
-      color: 'var(--text3)',
-      flex: 1
-    }
-  }, form.invitedPlayers.length > 0 ? `${form.invitedPlayers.length} player${form.invitedPlayers.length > 1 ? 's' : ''} invited` : 'Search players on Tennisverse...'), /*#__PURE__*/React.createElement(I, {
-    n: showInvitePicker ? 'ChevronDown' : 'ChevronRight',
-    s: 16,
-    c: "var(--text3)"
-  })), showInvitePicker && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: 'var(--surface)',
-      border: '1px solid var(--border2)',
-      borderTop: 'none',
-      borderRadius: '0 0 var(--radius2) var(--radius2)',
-      overflow: 'hidden'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: '10px 12px',
-      borderBottom: '1px solid var(--border)',
-      background: 'var(--bg)'
-    }
-  }, /*#__PURE__*/React.createElement("input", {
-    value: inviteSearch,
-    onChange: e => setInviteSearch(e.target.value),
-    placeholder: "Search players...",
-    autoFocus: true,
+  }, "Add")) : /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowManualCoach(true),
     style: {
       width: '100%',
-      background: 'var(--surface)',
-      border: '1px solid var(--border2)',
-      borderRadius: 'var(--radius3)',
-      padding: '8px 12px',
-      color: 'var(--text)',
-      fontSize: '14px',
-      outline: 'none'
-    }
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      maxHeight: '220px',
-      overflowY: 'auto'
-    }
-  }, filteredUsers.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: '14px 16px',
-      textAlign: 'center',
-      color: 'var(--text3)',
-      fontSize: '13px'
-    }
-  }, "No players match that name") : filteredUsers.slice(0, 30).map(u => {
-    const invited = form.invitedPlayers.some(p => p.id === u.id);
-    return /*#__PURE__*/React.createElement("div", {
-      key: u.id,
-      onClick: () => toggleInvite(u),
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        padding: '11px 16px',
-        borderBottom: '1px solid var(--border)',
-        cursor: 'pointer',
-        background: invited ? 'var(--accent4)' : 'transparent'
-      }
-    }, /*#__PURE__*/React.createElement(Avatar, {
-      src: u.photoURL,
-      name: `${u.firstName} ${u.lastName}`,
-      size: 38
-    }), /*#__PURE__*/React.createElement("div", {
-      style: {
-        flex: 1
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontWeight: '600',
-        fontSize: '14px'
-      }
-    }, u.firstName, " ", u.lastName), u.skillLevel && /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: '12px',
-        color: 'var(--text2)',
-        textTransform: 'capitalize'
-      }
-    }, u.skillLevel)), invited ? /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: '22px',
-        height: '22px',
-        borderRadius: '50%',
-        background: 'var(--accent)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }
-    }, /*#__PURE__*/React.createElement(I, {
-      n: "Check",
-      s: 13,
-      c: "var(--accent-ink)"
-    })) : /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: '22px',
-        height: '22px',
-        borderRadius: '50%',
-        border: '1px solid var(--border2)'
-      }
-    }));
-  }))), /*#__PURE__*/React.createElement("div", {
-    onClick: () => {
-      setShowManualPlayer(!showManualPlayer);
-      setShowInvitePicker(false);
-    },
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '10px',
-      padding: '10px 16px',
-      marginTop: '8px',
+      height: '44px',
+      borderRadius: '12px',
       background: 'transparent',
-      border: '1px dashed rgba(255,255,255,0.12)',
-      borderRadius: 'var(--radius2)',
-      cursor: 'pointer'
-    }
-  }, /*#__PURE__*/React.createElement(I, {
-    n: "Plus",
-    s: 15,
-    c: "var(--text3)"
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: '13px',
-      color: 'var(--text3)',
-      fontWeight: '600'
-    }
-  }, "Add player manually (not on app)")), showManualPlayer && /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: '14px 16px',
-      background: 'var(--surface)',
-      border: '1px solid var(--border2)',
-      borderTop: 'none',
-      borderRadius: '0 0 var(--radius2) var(--radius2)',
-      marginTop: '-1px'
-    }
-  }, /*#__PURE__*/React.createElement("input", {
-    value: manualPlayerName,
-    onChange: e => setManualPlayerName(e.target.value),
-    placeholder: "Full name *",
-    style: {
-      width: '100%',
-      padding: '11px 14px',
-      background: 'var(--bg)',
-      border: '1px solid var(--border2)',
-      borderRadius: 'var(--radius3)',
-      color: 'var(--text)',
-      fontSize: '14px',
-      outline: 'none',
-      marginBottom: '8px'
-    }
-  }), /*#__PURE__*/React.createElement("input", {
-    value: manualPlayerEmail,
-    onChange: e => setManualPlayerEmail(e.target.value),
-    placeholder: "Email address (optional)",
-    type: "email",
-    style: {
-      width: '100%',
-      padding: '11px 14px',
-      background: 'var(--bg)',
-      border: '1px solid var(--border2)',
-      borderRadius: 'var(--radius3)',
-      color: 'var(--text)',
-      fontSize: '14px',
-      outline: 'none',
-      marginBottom: '10px'
-    }
-  }), /*#__PURE__*/React.createElement("button", {
-    disabled: !manualPlayerName.trim(),
-    onClick: () => {
-      if (!manualPlayerName.trim()) return;
-      const [firstName, ...rest] = manualPlayerName.trim().split(' ');
-      const id = 'manual_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-      const newPlayer = {
-        id,
-        firstName,
-        lastName: rest.join(' ') || '',
-        email: manualPlayerEmail.trim() || '',
-        manual: true
-      };
-      setForm(f => ({
-        ...f,
-        invitedPlayers: [...f.invitedPlayers, newPlayer]
-      }));
-      setManualPlayerName('');
-      setManualPlayerEmail('');
-      setShowManualPlayer(false);
-    },
-    style: {
-      width: '100%',
-      padding: '11px',
-      borderRadius: 'var(--radius2)',
-      background: manualPlayerName.trim() ? 'var(--accent)' : 'var(--surface2)',
-      border: 'none',
-      color: manualPlayerName.trim() ? 'var(--accent-ink)' : 'var(--text3)',
-      fontSize: '14px',
-      fontWeight: '700',
-      cursor: manualPlayerName.trim() ? 'pointer' : 'default'
-    }
-  }, "Add Player"))), /*#__PURE__*/React.createElement(SectionLabel, null, "Settings"), /*#__PURE__*/React.createElement(SettingRow, {
-    icon: "Lock",
-    title: "Private Game",
-    sub: form.isPrivate ? 'Invite only — players need approval' : 'Public — open to all players',
-    on: form.isPrivate,
-    onChange: v => setForm({
-      ...form,
-      isPrivate: v
-    }),
-    accentKey: "amber"
-  }), /*#__PURE__*/React.createElement(SettingRow, {
-    icon: "Users",
-    title: "Player Limit",
-    sub: form.hasMaxPlayers ? `Max ${form.maxPlayers} players` : 'No limit',
-    on: form.hasMaxPlayers,
-    onChange: v => setForm({
-      ...form,
-      hasMaxPlayers: v
-    }),
-    accentKey: "blue"
-  }), form.hasMaxPlayers && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: '10px',
-      padding: '16px',
-      background: 'var(--surface)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius2)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '14px',
-      color: 'var(--text2)'
-    }
-  }, "Max players"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '0'
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setForm(f => ({
-      ...f,
-      maxPlayers: Math.max(2, f.maxPlayers - 1)
-    })),
-    style: {
-      width: '38px',
-      height: '38px',
-      borderRadius: 'var(--radius3) 0 0 var(--radius3)',
-      background: 'var(--surface2)',
-      border: '1px solid var(--border2)',
-      color: 'var(--text)',
-      fontSize: '20px',
-      cursor: 'pointer',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontWeight: '400'
-    }
-  }, "\u2212"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: '52px',
-      height: '38px',
-      background: 'var(--bg)',
-      border: '1px solid var(--border2)',
-      borderLeft: 'none',
-      borderRight: 'none',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: '17px',
-      fontWeight: '800',
-      fontFamily: "'DM Mono',monospace"
-    }
-  }, form.maxPlayers), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setForm(f => ({
-      ...f,
-      maxPlayers: Math.min(30, f.maxPlayers + 1)
-    })),
-    style: {
-      width: '38px',
-      height: '38px',
-      borderRadius: '0 var(--radius3) var(--radius3) 0',
-      background: 'var(--surface2)',
-      border: '1px solid var(--border2)',
-      color: 'var(--text)',
-      fontSize: '20px',
-      cursor: 'pointer',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontWeight: '400'
-    }
-  }, "+"))), /*#__PURE__*/React.createElement(SettingRow, {
-    icon: "Bell",
-    title: "Waitlist",
-    sub: form.allowWaitlist ? 'Full game? Players can queue up' : 'No waitlist — game closes when full',
-    on: form.allowWaitlist,
-    onChange: v => setForm({
-      ...form,
-      allowWaitlist: v
-    }),
-    accentKey: "green"
-  }), /*#__PURE__*/React.createElement(Textarea, {
-    label: "Notes (optional)",
-    value: form.notes,
-    onChange: e => setForm({
-      ...form,
-      notes: e.target.value
-    }),
-    placeholder: "Any info for players...",
-    style: {
-      minHeight: '80px',
-      marginTop: '8px'
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: '8px',
-      marginBottom: '14px'
-    }
-  }, !showNameTemplate ? /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setTemplateName(form.title || '');
-      setShowNameTemplate(true);
-    },
-    style: {
-      width: '100%',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: '8px',
-      padding: '12px',
-      borderRadius: 'var(--radius2)',
-      background: 'transparent',
-      border: '1px dashed rgba(255,255,255,0.15)',
+      border: '1px dashed var(--border2)',
       color: 'var(--text2)',
-      fontSize: '14px',
-      fontWeight: '600',
+      font: "600 13px 'DM Sans', sans-serif",
       cursor: 'pointer'
     }
-  }, /*#__PURE__*/React.createElement(I, {
-    n: "StarOutline",
-    s: 15,
-    c: "var(--text2)"
-  }), "Save as template") : /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: '8px',
-      padding: '12px',
-      background: 'var(--surface)',
-      border: '1px solid var(--border2)',
-      borderRadius: 'var(--radius2)'
-    }
-  }, /*#__PURE__*/React.createElement("input", {
-    value: templateName,
-    onChange: e => setTemplateName(e.target.value),
-    onKeyDown: e => e.key === 'Enter' && saveTemplate(),
-    placeholder: "Template name...",
-    autoFocus: true,
-    style: {
-      flex: 1,
-      padding: '10px 14px',
-      background: 'var(--bg)',
-      border: '1px solid var(--border2)',
-      borderRadius: 'var(--radius3)',
-      color: 'var(--text)',
-      fontSize: '14px',
-      outline: 'none'
-    }
-  }), /*#__PURE__*/React.createElement(Btn, {
-    onClick: saveTemplate,
-    disabled: savingTemplate || !templateName.trim(),
-    size: "sm"
-  }, savingTemplate ? '...' : 'Save'), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setShowNameTemplate(false);
-      setTemplateName('');
-    },
-    style: {
-      padding: '0 12px',
-      background: 'var(--surface2)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius3)',
-      color: 'var(--text2)',
-      fontSize: '13px',
-      fontWeight: '600',
-      cursor: 'pointer'
-    }
-  }, "Cancel"))), /*#__PURE__*/React.createElement(Btn, {
-    onClick: handleSubmit,
-    disabled: saving,
-    size: "lg"
-  }, saving ? 'Creating...' : 'Create Game')), showDatePicker && /*#__PURE__*/React.createElement(DatePickerModal, {
-    date: form.date,
-    onConfirm: d => {
-      setForm(f => ({
-        ...f,
-        date: d
-      }));
-      setShowDatePicker(false);
-    },
-    onClose: () => setShowDatePicker(false)
-  }), showTimePicker && /*#__PURE__*/React.createElement(TimePickerModal, {
-    hour: form.hour,
-    minute: form.minute,
-    ampm: form.ampm,
-    onConfirm: (hour, minute, ampm) => {
-      setForm(f => ({
-        ...f,
-        hour,
-        minute,
-        ampm
-      }));
-      setShowTimePicker(false);
-    },
-    onClose: () => setShowTimePicker(false)
-  }));
+  }, "＋ Add coach by name (not on app)")));
 }
 
-// ==================== DATE PICKER MODAL ====================
 function DatePickerModal({
   date,
   onConfirm,
