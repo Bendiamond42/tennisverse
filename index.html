@@ -12931,7 +12931,9 @@ function ProfileScreen({
   const [showCoachEditor, setShowCoachEditor] = useState(false);
   const [matchScores, setMatchScores] = useState([]);
   const [scorecardId, setScorecardId] = useState(null); // open gameResults doc
-  const [historyLimit, setHistoryLimit] = useState(5);
+  // Show a full list by default — paging exists to reach OLDER games, not to
+  // hide recent ones. Collapsing this to a handful reads as data loss.
+  const [historyLimit, setHistoryLimit] = useState(25);
   const [loadingScores, setLoadingScores] = useState(true);
   useEffect(() => {
     if (userProfile) setForm({
@@ -13941,7 +13943,7 @@ function ProfileScreen({
       c: "var(--text3)"
     }), g.location.split(',')[0])));
   }), gameHistory.length > historyLimit && /*#__PURE__*/React.createElement("button", {
-    onClick: () => setHistoryLimit(n => n + 20),
+    onClick: () => setHistoryLimit(n => n + 25),
     style: {
       width: '100%',
       height: '48px',
@@ -13953,8 +13955,8 @@ function ProfileScreen({
       font: "600 14px 'DM Sans', sans-serif",
       cursor: 'pointer'
     }
-  }, `View more · ${gameHistory.length - historyLimit} older game${gameHistory.length - historyLimit === 1 ? '' : 's'}`), historyLimit > 5 && gameHistory.length <= historyLimit && /*#__PURE__*/React.createElement("button", {
-    onClick: () => setHistoryLimit(5),
+  }, `View more · ${gameHistory.length - historyLimit} older game${gameHistory.length - historyLimit === 1 ? '' : 's'}`), historyLimit > 25 && gameHistory.length <= historyLimit && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setHistoryLimit(25),
     style: {
       width: '100%',
       height: '44px',
