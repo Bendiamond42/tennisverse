@@ -12487,6 +12487,7 @@ function GameScorecardModal({
   } = useAuth();
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [people, setPeople] = useState({}); // last-resort id -> profile
   useEffect(() => {
     if (!resultId) return;
     let alive = true;
@@ -12504,10 +12505,44 @@ function GameScorecardModal({
       alive = false;
     };
   }, [resultId]);
+  // Any player still unnamed after the join gets looked up in users.
+  useEffect(() => {
+    if (!result) return;
+    const known = {};
+    ((result.players) || []).forEach(pl => {
+      if (pl && pl.playerId && pl.name) known[pl.playerId] = true;
+    });
+    const missing = (result.standings || []).filter(p => !p.name && !known[p.playerId] && p.playerId && !p.playerId.startsWith('manual_')).map(p => p.playerId).slice(0, 10);
+    if (!missing.length) return;
+    let alive = true;
+    Promise.all(missing.map(id => db.collection('users').doc(id).get().then(d => d.exists ? [id, {
+      name: `${d.data().firstName || ''} ${d.data().lastName || ''}`.trim(),
+      photoURL: d.data().photoURL || ''
+    }] : null).catch(() => null))).then(pairs => {
+      if (!alive) return;
+      const m = {};
+      pairs.forEach(pr => {
+        if (pr) m[pr[0]] = pr[1];
+      });
+      if (Object.keys(m).length) setPeople(m);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [result]);
   const fmtClock = ms => {
     const t = Math.floor((ms || 0) / 1000);
     return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
   };
+  // standings historically stored only playerId; the names live in the
+  // sibling players array on the same document. Join them so games saved
+  // before names were written into standings still read correctly.
+  const roster = {};
+  ((result && result.players) || []).forEach(pl => {
+    if (pl && pl.playerId) roster[pl.playerId] = pl;
+  });
+  const nameFor = p => p.name || (roster[p.playerId] || {}).name || (people[p.playerId] || {}).name || 'Player';
+  const photoFor = p => p.photoURL || (roster[p.playerId] || {}).photoURL || (people[p.playerId] || {}).photoURL || '';
   const standings = (result && result.standings || []).slice().sort((a, b) => (b.timeMs || 0) - (a.timeMs || 0));
   const top = standings[0];
   const when = result && result.completedAt && result.completedAt.toDate ? result.completedAt.toDate() : null;
@@ -12612,7 +12647,7 @@ function GameScorecardModal({
       color: 'var(--text)',
       marginBottom: '6px'
     }
-  }, top.name || 'Player'), /*#__PURE__*/React.createElement("div", {
+  }, nameFor(top)), /*#__PURE__*/React.createElement("div", {
     className: "mono",
     style: {
       font: "400 13px var(--mono)",
@@ -12653,7 +12688,7 @@ function GameScorecardModal({
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap'
       }
-    }, p.name || 'Player'), i === 0 && /*#__PURE__*/React.createElement(I, {
+    }, nameFor(p)), i === 0 && /*#__PURE__*/React.createElement(I, {
       n: "Crown",
       s: 13,
       c: "var(--gold)"
@@ -14508,6 +14543,10 @@ function LiveGameScreen({
       const ts = firebase.firestore.FieldValue.serverTimestamp();
       const standings = lb.map((pl, i) => ({
         playerId: pl.id,
+        // name/photo denormalized onto the standing so a scorecard renders
+        // without joining anything else
+        name: pl.name || '',
+        photoURL: pl.photoURL || '',
         rank: i + 1,
         timeMs: pl.timeMs,
         wins: pl.wins,
