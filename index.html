@@ -6980,6 +6980,9 @@ function EventDetailScreen({
   const [eventMenuOpen, setEventMenuOpen] = useState(false);
   const [showEditEvent, setShowEditEvent] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteText, setDeleteText] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const [editEventForm, setEditEventForm] = useState(null);
   const [savingEdit, setSavingEdit] = useState(false);
   // Player ids present when the edit sheet was opened. Anything here that is
@@ -7444,6 +7447,35 @@ function EventDetailScreen({
     }
   };
 
+  // Permanently delete the event. Firestore has no cascade, so the comments
+  // subcollection is removed explicitly first, or it is orphaned forever.
+  // gameResults / playerScores are deliberately left alone: they are the
+  // historical scorecard and players' stats already count them, so deleting a
+  // game must not rewrite anyone's record.
+  const deleteEvent = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const ref = db.collection('events').doc(eventId);
+      // comments come in pages; batches cap at 500 writes
+      for (;;) {
+        const snap = await ref.collection('comments').limit(400).get();
+        if (snap.empty) break;
+        const batch = db.batch();
+        snap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+        if (snap.size < 400) break;
+      }
+      await ref.delete();
+      setShowDeleteConfirm(false);
+      setDeleting(false);
+      onBack();
+    } catch (e) {
+      console.error('Delete event error:', e);
+      setDeleting(false);
+    }
+  };
+
   // Duplicate this event — copies all config, resets runtime state, only date/time changes.
   // The original event is never modified.
   const startDuplicate = () => {
@@ -7787,7 +7819,32 @@ function EventDetailScreen({
       n: "Trash",
       s: 14,
       c: "var(--red)"
-    }), " Cancel Event"))))
+    }), " Cancel Event"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        setDeleteText('');
+        setShowDeleteConfirm(true);
+        setEventMenuOpen(false);
+      },
+      style: {
+        width: '100%',
+        padding: '12px 16px',
+        background: 'none',
+        border: 'none',
+        borderTop: '1px solid var(--border)',
+        color: 'var(--red)',
+        fontSize: '13px',
+        fontWeight: '700',
+        cursor: 'pointer',
+        textAlign: 'left',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px'
+      }
+    }, /*#__PURE__*/React.createElement(I, {
+      n: "Trash",
+      s: 14,
+      c: "var(--red)"
+    }), " Delete Permanently"))))
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
@@ -10093,7 +10150,106 @@ function EventDetailScreen({
   }))))), showShareModal && /*#__PURE__*/React.createElement(ShareModal, {
     link: getEventDeepLink(),
     onClose: () => setShowShareModal(false)
-  }), showCancelConfirm && /*#__PURE__*/React.createElement("div", {
+  }), showDeleteConfirm && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.7)',
+      backdropFilter: 'blur(6px)',
+      zIndex: 1100,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '20px'
+    },
+    onClick: () => !deleting && setShowDeleteConfirm(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.stopPropagation(),
+    style: {
+      width: '100%',
+      maxWidth: '340px',
+      background: 'var(--bg3)',
+      border: '1px solid rgba(255,107,107,.3)',
+      borderRadius: 'var(--radius)',
+      padding: '26px 22px',
+      textAlign: 'center',
+      animation: 'tvin .22s ease-out'
+    }
+  }, /*#__PURE__*/React.createElement(I, {
+    n: "Trash",
+    s: 26,
+    c: "var(--red)"
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "800 20px/1.2 'DM Sans', sans-serif",
+      letterSpacing: '-0.02em',
+      color: 'var(--text)',
+      margin: '12px 0 8px'
+    }
+  }, "Delete this game?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "400 13px/1.5 'DM Sans', sans-serif",
+      color: 'var(--text2)',
+      marginBottom: '6px'
+    }
+  }, "\u201C", (event === null || event === void 0 ? void 0 : event.title) || 'This game', "\u201D and its discussion will be removed for everyone. This cannot be undone."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      font: "400 12px/1.5 'DM Sans', sans-serif",
+      color: 'var(--text3)',
+      marginBottom: '16px'
+    }
+  }, "Saved scorecards and player stats are kept."), /*#__PURE__*/React.createElement("input", {
+    value: deleteText,
+    onChange: e => setDeleteText(e.target.value),
+    placeholder: "Type DELETE to confirm",
+    autoFocus: true,
+    style: {
+      width: '100%',
+      height: '46px',
+      boxSizing: 'border-box',
+      padding: '0 14px',
+      borderRadius: '12px',
+      background: 'var(--surface)',
+      border: `1px solid ${deleteText.trim().toUpperCase() === 'DELETE' ? 'rgba(255,107,107,.5)' : 'var(--border)'}`,
+      color: 'var(--text)',
+      font: "600 14px 'DM Sans', sans-serif",
+      textAlign: 'center',
+      outline: 'none',
+      marginBottom: '14px'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: '10px'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowDeleteConfirm(false),
+    disabled: deleting,
+    style: {
+      flex: 1,
+      height: '48px',
+      borderRadius: '13px',
+      background: 'var(--surface2)',
+      border: '1px solid rgba(255,255,255,.1)',
+      color: 'var(--text)',
+      font: "700 14px 'DM Sans', sans-serif",
+      cursor: 'pointer'
+    }
+  }, "Keep it"), /*#__PURE__*/React.createElement("button", {
+    onClick: deleteEvent,
+    disabled: deleting || deleteText.trim().toUpperCase() !== 'DELETE',
+    style: {
+      flex: 1,
+      height: '48px',
+      borderRadius: '13px',
+      border: 'none',
+      background: deleteText.trim().toUpperCase() === 'DELETE' && !deleting ? 'var(--red)' : 'var(--surface2)',
+      color: deleteText.trim().toUpperCase() === 'DELETE' && !deleting ? '#1a0505' : 'var(--text3)',
+      font: "700 14px 'DM Sans', sans-serif",
+      cursor: deleteText.trim().toUpperCase() === 'DELETE' && !deleting ? 'pointer' : 'default',
+      transition: 'all .15s'
+    }
+  }, deleting ? 'Deleting…' : 'Delete')))), showCancelConfirm && /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'fixed',
       inset: 0,
